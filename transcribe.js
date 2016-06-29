@@ -30,20 +30,19 @@ const transcript = io.getTranscript();
 
 const speech_to_text = watson.speech_to_text(io.config.STT);
 
-io.onCommands('stt', comm => {
-  if (comm.command === 'switch-model') {
-      logger.log('info', `Switching to the ${comm.model} model.`);
-      stopCapture();
+io.onTopic('switch-model.stt.command', msg => {
+  const comm = JSON.parse(msg.content.toString());
+  logger.log('info', `Switching to the ${comm.model} model.`);
+  stopCapture();
 
-      // Restart capturing after 1 second.
-      // I can't restart transcribing immediately, because I have to wait
-      // the previous transcribe sessions to close, otherwise, the server will
-      // reject my connections.
-      setTimeout(model => {
-        startCapture();
-        startTranscribe(model, transcript);
-      }, 1000, comm.model);
-    }
+  // Restart capturing after 1 second.
+  // I can't restart transcribing immediately, because I have to wait
+  // the previous transcribe sessions to close, otherwise, the server will
+  // reject my connections.
+  setTimeout(model => {
+    startCapture();
+    startTranscribe(model, transcript);
+  }, 1000, comm.model);
 });
 
 function startCapture() {
@@ -84,6 +83,7 @@ function startTranscribe(currentModel, transcript) {
       content_type: 'audio/l16; rate=44100; channels=1',
       model: io.config.models[currentModel],
       inactivity_timeout: -1,
+      smart_formatting: true,
       'x-watson-learning-opt-out': true,
       interim_results: true,
       keywords: ['celia', 'watson'],
@@ -94,9 +94,11 @@ function startTranscribe(currentModel, transcript) {
     textStream.on('results', input => {
       const result = input.results[0];
 
-      const msg = {channel: i, result: result, time_captured: new Date().getTime()};
-      logger.info(msg);
-      transcript.publish(io.config.rabbitMQ.exchange, result.final, msg);
+      if (result) {
+        const msg = {channel: i, result: result, time_captured: new Date().getTime()};
+        logger.info(msg);
+        transcript.publish(io.config.device, result.final, msg);
+      }
     });
   }
 }

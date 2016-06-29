@@ -1,0 +1,16 @@
+{
+  "name": "transcript-worker",
+  "version": "1.0.0",
+  "main": "transcribe.js",
+  "scripts": {
+    "start": "node transcribe.js"
+  },
+  "author": "Yunfeng Zhang",
+  "private": true,
+  "dependencies": {
+    "celio": "git+ssh://github.ibm.com/celio/CELIO.git",
+    "commander": "^2.9.0",
+    "watson-developer-cloud": "^1.3.3",
+    "winston": "^2.2.0"
+  }
+}

@@ -9,9 +9,8 @@ The cog.json file needs to have at least the following fields:
     "exchange": "exchange name"
   },
   "STT": {
-    // Watson STT authentication
-    "username": "",
-    "password": ""
+    "username": "Your Watson STT username",
+    "password": "Your Password"
   },
   "device": "prefix to the published message topic",
   "models": {

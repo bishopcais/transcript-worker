@@ -3,6 +3,7 @@ const CELIO = require('celio');
 const winston = require('winston');
 const watson = require('watson-developer-cloud');
 const program = require('commander');
+const stream = require('stream');
 
 program
   .version('0.1')
@@ -27,6 +28,7 @@ logger.log('info', `Transcribing ${channelCount} channels.`);
 
 const io = new CELIO();
 const transcript = io.getTranscript();
+const speaker = io.getSpeaker();
 
 const speech_to_text = watson.speech_to_text(io.config.STT);
 
@@ -45,6 +47,18 @@ io.onTopic('switch-model.stt.command', msg => {
   }, 1000, comm.model);
 });
 
+paused = false;
+
+// TODO: selectively pause channels
+
+speaker.onBeginSpeak(() => {
+  paused = true;
+});
+
+speaker.onEndSpeak(() => {
+  paused = false;
+});
+
 function startCapture() {
   for (let i = 0; i < channelCount; i++) {
     const p = spawn('ffmpeg', [
@@ -55,11 +69,19 @@ function startCapture() {
       '-acodec', 'pcm_s16le', '-ar', '44100',
       '-f', 'wav', '-']);
 
+    const pausable = new stream.Transform();
+    pausable._transform = function(chunk, encoding, callback) {
+      if (!paused) {
+        this.push(chunk);
+      }
+      callback();
+    };
+
     if (channels[i]) {
       channels[i].process = p;
-      channels[i].stream = p.stdout;
+      channels[i].stream = p.stdout.pipe(pausable);
     } else {
-      channels.push({process:p, stream:p.stdout});
+      channels.push({process:p, stream:p.stdout.pipe(pausable)});
     }
   }
 }
@@ -86,7 +108,7 @@ function startTranscribe(currentModel, transcript) {
       smart_formatting: true,
       'x-watson-learning-opt-out': true,
       interim_results: true,
-      keywords: ['celia', 'watson'],
+      keywords: ['celia', 'Watson'],
       keywords_threshold: 0.01
     }));
 

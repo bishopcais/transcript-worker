@@ -1,5 +1,8 @@
 # Transcript-Worker
 
+## Requirements
+ffmpeg
+
 To run this, you need to have a cog.json file in your package directory.
 The cog.json file needs to have at least the following fields:
 ```json

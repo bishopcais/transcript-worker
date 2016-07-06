@@ -127,7 +127,7 @@ function startTranscribe(currentModel, transcript) {
       const result = input.results[0];
 
       if (result) {
-        const msg = {channel: i, result: result, time_captured: new Date().getTime()};
+        const msg = {channel: i, result: result};
         logger.info(msg);
         transcript.publish(channelTypes[i], result.final, msg);
       }

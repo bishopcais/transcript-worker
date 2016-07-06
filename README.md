@@ -34,11 +34,11 @@ The messages are JSON strings with the following format:
 ```javascript
 {
   channel: "channel_num",
+  speaker: "speaker_name (optional)",
   result: {
     alternatives: [{transcript: "message", confidence: 0.9}],
     final: true,
     keyword_result: {}
-  },
-  time_captured: unix_time_in_ms
+  }
 }
 ```

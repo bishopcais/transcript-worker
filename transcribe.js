@@ -81,7 +81,7 @@ function startCapture() {
 
     let s;
 
-    if (channelTypes[i] !== 'close') {
+    if (channelTypes[i] !== 'near') {
       s = p.stdout.pipe(pausable);
     } else {
       s = p.stdout;

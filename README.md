@@ -18,13 +18,13 @@ The cog.json file needs to have at least the following fields:
     "password": "Your Password",
     "version" "v1"
   },
-  "channels": ["close", "mid", "far"],
+  "channels": ["near", "far"],
   "keywords": ["optinal", "array"],
   "keywords_threshold": 0.01
 }
 ```
 The channels list the type of microphone for each channel.
-If you just want to transcribe one channel, you can use ["mid"], for example.
+If you just want to transcribe one channel, you can use ["far"], for example.
 
 The messages are published to RabbitMQ with the topic keys channelType.interim.transcript and device.final.transcript.
 The "interim" channel only contains intermediate results while the "final" channel only has the full sentence results.

@@ -59,29 +59,29 @@ function startCapture() {
       '-acodec', 'pcm_s16le', '-ar', '44100',
       '-f', 'wav', '-']);
 
-    let paused = false;
-
-    speaker.onBeginSpeak(() => {
-      console.log(`Pausing channel ${i}`);
-      paused = true;
-    });
-
-    speaker.onEndSpeak(() => {
-      console.log(`Resuming channel ${i}`);
-      paused = false;
-    });
-
-    const pausable = new stream.Transform();
-    pausable._transform = function(chunk, encoding, callback) {
-      if (!paused) {
-        this.push(chunk);
-      }
-      callback();
-    };
-
     let s;
 
     if (channelTypes[i] !== 'near') {
+      let paused = false;
+
+      speaker.onBeginSpeak(() => {
+        console.log(`Pausing channel ${i}`);
+        paused = true;
+      });
+
+      speaker.onEndSpeak(() => {
+        console.log(`Resuming channel ${i}`);
+        paused = false;
+      });
+
+      const pausable = new stream.Transform();
+      pausable._transform = function(chunk, encoding, callback) {
+        if (!paused) {
+          this.push(chunk);
+        }
+        callback();
+      };
+
       s = p.stdout.pipe(pausable);
     } else {
       s = p.stdout;

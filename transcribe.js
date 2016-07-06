@@ -2,13 +2,7 @@ const spawn = require('child_process').spawn;
 const CELIO = require('celio');
 const winston = require('winston');
 const watson = require('watson-developer-cloud');
-const program = require('commander');
 const stream = require('stream');
-
-program
-  .version('0.1')
-  .option('-n, --nchannels [value]', 'Number of channels to transcribe.', parseInt)
-  .parse(process.argv);
 
 const logger = new (winston.Logger)({
     transports: [
@@ -18,49 +12,45 @@ const logger = new (winston.Logger)({
     ]
 });
 
-const channels = [];
-let channelCount = 1;
-if (program.nchannels) {
-  channelCount = program.nchannels;
-}
-
-logger.log('info', `Transcribing ${channelCount} channels.`);
-
 const io = new CELIO();
 const transcript = io.getTranscript();
 const speaker = io.getSpeaker();
 
-const speech_to_text = watson.speech_to_text(io.config.STT);
-
-io.onTopic('switch-model.stt.command', msg => {
-  const comm = JSON.parse(msg.content.toString());
-  logger.log('info', `Switching to the ${comm.model} model.`);
-  stopCapture();
-
-  // Restart capturing after 1 second.
-  // I can't restart transcribing immediately, because I have to wait
-  // the previous transcribe sessions to close, otherwise, the server will
-  // reject my connections.
-  setTimeout(model => {
-    startCapture();
-    startTranscribe(model, transcript);
-  }, 1000, comm.model);
+io.config.required(['channels', 'STT:username', 'STT:password', 'STT:version']);
+io.config.defaults({
+  'models': {
+    generic: 'en-US_BroadbandModel'
+  }
 });
 
-paused = false;
+const channelTypes = io.config.get('channels');
+logger.info(`Transcribing ${channelTypes.length} channels.`);
 
-// TODO: selectively pause channels
+const channels = [];
+const models = io.config.get('models');
 
-speaker.onBeginSpeak(() => {
-  paused = true;
-});
+const speech_to_text = watson.speech_to_text(io.config.get('STT'));
 
-speaker.onEndSpeak(() => {
-  paused = false;
+transcript.onSwitchModel(comm => {
+  if (!models[comm.model]) {
+    logger.info(`Cannot find the ${comm.model} model. Not switching.`);
+  } else {
+    logger.info(`Switching to the ${comm.model} model.`);
+    stopCapture();
+
+    // Restart capturing after 1 second.
+    // I can't restart transcribing immediately, because I have to wait
+    // the previous transcribe sessions to close, otherwise, the server will
+    // reject my connections.
+    setTimeout(model => {
+      startCapture();
+      startTranscribe(model, transcript);
+    }, 1000, comm.model);
+  }
 });
 
 function startCapture() {
-  for (let i = 0; i < channelCount; i++) {
+  for (let i = 0; i < channelTypes.length; i++) {
     const p = spawn('ffmpeg', [
       '-v', 'error',
       '-f', 'avfoundation',
@@ -68,6 +58,18 @@ function startCapture() {
       '-map_channel', `0.0.${i}`,
       '-acodec', 'pcm_s16le', '-ar', '44100',
       '-f', 'wav', '-']);
+
+    let paused = false;
+
+    speaker.onBeginSpeak(() => {
+      console.log(`Pausing channel ${i}`);
+      paused = true;
+    });
+
+    speaker.onEndSpeak(() => {
+      console.log(`Resuming channel ${i}`);
+      paused = false;
+    });
 
     const pausable = new stream.Transform();
     pausable._transform = function(chunk, encoding, callback) {
@@ -77,18 +79,26 @@ function startCapture() {
       callback();
     };
 
+    let s;
+
+    if (channelTypes[i] !== 'close') {
+      s = p.stdout.pipe(pausable);
+    } else {
+      s = p.stdout;
+    }
+
     if (channels[i]) {
       channels[i].process = p;
-      channels[i].stream = p.stdout.pipe(pausable);
+      channels[i].stream = s;
     } else {
-      channels.push({process:p, stream:p.stdout.pipe(pausable)});
+      channels.push({process:p, stream:s});
     }
   }
 }
 
 function stopCapture() {
-  logger.log('info', 'Stopping all channels.');
-  for (let i = 0; i < channelCount; i++) {
+  logger.info('Stopping all channels.');
+  for (let i = 0; i < channelTypes.length; i++) {
     if (channels[i].process) {
       channels[i].process.kill();
       channels[i].process = null;
@@ -98,18 +108,18 @@ function stopCapture() {
 }
 
 function startTranscribe(currentModel, transcript) {
-  logger.log('info', `Starting all channels with the ${currentModel} model.`);
+  logger.info(`Starting all channels with the ${currentModel} model.`);
 
-  for (let i = 0; i < channelCount; i++) {
+  for (let i = 0; i < channelTypes.length; i++) {
     const textStream = channels[i].stream.pipe(speech_to_text.createRecognizeStream({
       content_type: 'audio/l16; rate=44100; channels=1',
-      model: io.config.models[currentModel],
+      model: models[currentModel],
       inactivity_timeout: -1,
       smart_formatting: true,
       'x-watson-learning-opt-out': true,
       interim_results: true,
-      keywords: ['celia', 'Watson'],
-      keywords_threshold: 0.01
+      keywords: io.config.get('keywords'),
+      keywords_threshold: io.config.get('keywords_threshold')
     }));
 
     textStream.setEncoding('utf8');
@@ -119,7 +129,7 @@ function startTranscribe(currentModel, transcript) {
       if (result) {
         const msg = {channel: i, result: result, time_captured: new Date().getTime()};
         logger.info(msg);
-        transcript.publish(io.config.device, result.final, msg);
+        transcript.publish(channelTypes[i], result.final, msg);
       }
     });
   }

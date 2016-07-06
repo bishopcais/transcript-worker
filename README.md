@@ -1,28 +1,34 @@
 # Transcript-Worker
 
 ## Requirements
-**ffmpeg**
+* You must have **ffmpeg** installed.
 
 To run this, you need to have a cog.json file in your package directory.
 The cog.json file needs to have at least the following fields:
 ```json
 {
-  "rabbitMQ": {
-    "url": "amqp url",
+  "mq": {
+    "url": "mq url",
+    "username": "username",
+    "password": "password",
     "exchange": "exchange name"
   },
   "STT": {
     "username": "Your Watson STT username",
-    "password": "Your Password"
+    "password": "Your Password",
+    "version" "v1"
   },
-  "device": "prefix to the published message topic",
-  "models": {
-    "generic": "en-US_BroadbandModel",
-  }
+  "channels": ["close", "mid", "far"],
+  "keywords": ["optinal", "array"],
+  "keywords_threshold": 0.01
 }
 ```
+The channels list the type of microphone for each channel.
+If you just want to transcribe one channel, you can use ["mid"], for example.
 
-The messages are published to RabbitMQ with the topic keys device.interim.transcript and device.final.transcript.  The "interim" channel only contains intermediate results while the "final" channel only has the full sentence results.  You can use CELIO's transcript object to subscribe to these channels.
+The messages are published to RabbitMQ with the topic keys channelType.interim.transcript and device.final.transcript.
+The "interim" channel only contains intermediate results while the "final" channel only has the full sentence results.
+You can use CELIO's transcript object to subscribe to these topics.
 
 The messages are JSON strings with the following format:
 ```javascript

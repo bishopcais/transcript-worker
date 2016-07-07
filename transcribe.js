@@ -68,7 +68,7 @@ function startCapture() {
       '-f', 'avfoundation',
       '-i', 'none:default',
       '-map_channel', `0.0.${i}`,
-      '-acodec', 'libopus', '-b', '160k', '-vbr', 'on',
+      '-acodec', 'libopus', '-b', '16k', '-vbr', 'on',
       '-f', 'ogg', '-']);
 
     p.stderr.on('data', data => {

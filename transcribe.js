@@ -5,11 +5,23 @@ const watson = require('watson-developer-cloud');
 const stream = require('stream');
 
 const logger = new (winston.Logger)({
-    transports: [
-      new (winston.transports.Console)({
-        'timestamp': ()=>new Date().toLocaleString('en-us', {timeZoneName: 'short'})
-      })
-    ]
+  transports: [
+    new winston.transports.File({
+        level: 'info',
+        colorize: false,
+        timestamp: ()=>new Date().toLocaleString('en-us', {timeZoneName: 'short'}),
+        filename: './logs/all-logs.log',
+        handleExceptions: true,
+        maxsize: 5242880 //5MB
+    }),
+    new winston.transports.Console({
+        level: 'info',
+        handleExceptions: true,
+        humanReadableUnhandledException: true,
+        json: false,
+        colorize: true
+    }) 
+  ]
 });
 
 const io = new CELIO();
@@ -56,8 +68,13 @@ function startCapture() {
       '-f', 'avfoundation',
       '-i', 'none:default',
       '-map_channel', `0.0.${i}`,
-      '-acodec', 'pcm_s16le', '-ar', '44100',
-      '-f', 'wav', '-']);
+      '-acodec', 'libopus', '-b', '160k', '-vbr', 'on',
+      '-f', 'ogg', '-']);
+
+    p.stderr.on('data', data => {
+      logger.error(data.toString());
+      process.exit(1);
+    });
 
     let s;
 
@@ -65,12 +82,12 @@ function startCapture() {
       let paused = false;
 
       speaker.onBeginSpeak(() => {
-        console.log(`Pausing channel ${i}`);
+        logger.info(`Pausing channel ${i}`);
         paused = true;
       });
 
       speaker.onEndSpeak(() => {
-        console.log(`Resuming channel ${i}`);
+        logger.info(`Resuming channel ${i}`);
         paused = false;
       });
 
@@ -112,7 +129,7 @@ function startTranscribe(currentModel, transcript) {
 
   for (let i = 0; i < channelTypes.length; i++) {
     const textStream = channels[i].stream.pipe(speech_to_text.createRecognizeStream({
-      content_type: 'audio/l16; rate=44100; channels=1',
+      content_type: 'audio/ogg;codecs=opus',
       model: models[currentModel],
       inactivity_timeout: -1,
       smart_formatting: true,
@@ -128,7 +145,9 @@ function startTranscribe(currentModel, transcript) {
 
       if (result) {
         const msg = {channel: i, result: result};
-        logger.info(msg);
+        if (result.final) {
+          logger.info(JSON.stringify(msg));
+        }
         transcript.publish(channelTypes[i], result.final, msg);
       }
     });

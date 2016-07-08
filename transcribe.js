@@ -68,8 +68,8 @@ function startCapture() {
       '-f', 'avfoundation',
       '-i', 'none:default',
       '-map_channel', `0.0.${i}`,
-      '-acodec', 'libopus', '-b', '16k', '-vbr', 'on',
-      '-f', 'ogg', '-']);
+      '-acodec', 'pcm_s16le', '-ar', '16000',
+      '-f', 'wav', '-']);
 
     p.stderr.on('data', data => {
       logger.error(data.toString());
@@ -129,7 +129,7 @@ function startTranscribe(currentModel, transcript) {
 
   for (let i = 0; i < channelTypes.length; i++) {
     const textStream = channels[i].stream.pipe(speech_to_text.createRecognizeStream({
-      content_type: 'audio/ogg;codecs=opus',
+      content_type: 'audio/l16; rate=16000; channels=1',
       model: models[currentModel],
       inactivity_timeout: -1,
       smart_formatting: true,

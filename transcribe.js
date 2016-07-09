@@ -154,6 +154,7 @@ function transcribe() {
     });
 
     sttStream.on('error', (err) => {
+      logger.error(err.message);
       logger.info('An error occurred. Restarting capturing after 1 second.');
       delayedRestart();
     });

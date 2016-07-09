@@ -1,7 +1,8 @@
 # Transcript-Worker
 
 ## Requirements
-* You must have **ffmpeg** installed.
+You must have **ffmpeg** installed.
+On a mac, you can use `brew install ffmpeg`.
 
 To run this, you need to have a cog.json file in your package directory.
 The cog.json file needs to have at least the following fields:
@@ -18,8 +19,8 @@ The cog.json file needs to have at least the following fields:
     "password": "Your Password",
     "version" "v1"
   },
-  "channels": ["near", "far"],
-  "keywords": ["optinal", "array"],
+  "channels": ["far"],
+  "keywords": ["watson", "celia"],
   "keywords_threshold": 0.01
 }
 ```

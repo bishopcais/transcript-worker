@@ -3,6 +3,11 @@ const CELIO = require('celio');
 const winston = require('winston');
 const watson = require('watson-developer-cloud');
 const stream = require('stream');
+const fs = require('fs');
+
+if (!fs.existsSync('logs')) {
+    fs.mkdirSync('logs');
+}
 
 const logger = new (winston.Logger)({
   transports: [
@@ -10,7 +15,7 @@ const logger = new (winston.Logger)({
         level: 'info',
         colorize: false,
         timestamp: ()=>new Date().toLocaleString('en-us', {timeZoneName: 'short'}),
-        filename: './logs/all-logs.log',
+        filename: 'logs/all-logs.log',
         handleExceptions: true,
         maxsize: 5242880 //5MB
     }),
@@ -28,11 +33,12 @@ const io = new CELIO();
 const transcript = io.getTranscript();
 const speaker = io.getSpeaker();
 
-io.config.required(['channels', 'STT:username', 'STT:password', 'STT:version']);
+io.config.required(['STT:username', 'STT:password', 'STT:version']);
 io.config.defaults({
   'models': {
     generic: 'en-US_BroadbandModel'
-  }
+  },
+  'channels': ["far"]
 });
 
 const channelTypes = io.config.get('channels');
@@ -40,6 +46,7 @@ logger.info(`Transcribing ${channelTypes.length} channels.`);
 
 const channels = [];
 const models = io.config.get('models');
+const currentModel = 'generic';
 
 const speech_to_text = watson.speech_to_text(io.config.get('STT'));
 
@@ -48,18 +55,23 @@ transcript.onSwitchModel(comm => {
     logger.info(`Cannot find the ${comm.model} model. Not switching.`);
   } else {
     logger.info(`Switching to the ${comm.model} model.`);
-    stopCapture();
+    
+    currentModel = comm.model;
+    delayedRestart();
+  }
+});
+
+function delayedRestart() {
+  stopCapture();
 
     // Restart capturing after 1 second.
     // I can't restart transcribing immediately, because I have to wait
     // the previous transcribe sessions to close, otherwise, the server will
     // reject my connections.
-    setTimeout(model => {
+    setTimeout(() => {
       startCapture();
-      startTranscribe(model, transcript);
-    }, 1000, comm.model);
-  }
-});
+    }, 1000);
+};
 
 function startCapture() {
   for (let i = 0; i < channelTypes.length; i++) {
@@ -111,6 +123,8 @@ function startCapture() {
       channels.push({process:p, stream:s});
     }
   }
+  
+  transcribe();
 }
 
 function stopCapture() {
@@ -124,11 +138,11 @@ function stopCapture() {
   }
 }
 
-function startTranscribe(currentModel, transcript) {
+function transcribe() {
   logger.info(`Starting all channels with the ${currentModel} model.`);
 
   for (let i = 0; i < channelTypes.length; i++) {
-    const textStream = channels[i].stream.pipe(speech_to_text.createRecognizeStream({
+    const sttStream = speech_to_text.createRecognizeStream({
       content_type: 'audio/l16; rate=16000; channels=1',
       model: models[currentModel],
       inactivity_timeout: -1,
@@ -137,7 +151,14 @@ function startTranscribe(currentModel, transcript) {
       interim_results: true,
       keywords: io.config.get('keywords'),
       keywords_threshold: io.config.get('keywords_threshold')
-    }));
+    });
+
+    sttStream.on('error', (err) => {
+      logger.info('An error occurred. Restarting capturing after 1 second.');
+      delayedRestart();
+    });
+
+    const textStream = channels[i].stream.pipe(sttStream);
 
     textStream.setEncoding('utf8');
     textStream.on('results', input => {
@@ -155,4 +176,3 @@ function startTranscribe(currentModel, transcript) {
 }
 
 startCapture();
-startTranscribe('generic', transcript);

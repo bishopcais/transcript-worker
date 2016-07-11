@@ -50,6 +50,20 @@ const currentModel = 'generic';
 
 const speech_to_text = watson.speech_to_text(io.config.get('STT'));
 
+let deviceInterface;
+
+ switch (process.platform) {
+    case 'darwin':
+      deviceInterface = 'avfoundation';
+      break;
+    case 'win32':
+      deviceInterface = 'dshow';
+      break;
+    default:
+      deviceInterface = 'alsa';
+      break;
+ }
+
 transcript.onSwitchModel(comm => {
   if (!models[comm.model]) {
     logger.info(`Cannot find the ${comm.model} model. Not switching.`);
@@ -77,7 +91,7 @@ function startCapture() {
   for (let i = 0; i < channelTypes.length; i++) {
     const p = spawn('ffmpeg', [
       '-v', 'error',
-      '-f', 'avfoundation',
+      '-f', deviceInterface,
       '-i', 'none:default',
       '-map_channel', `0.0.${i}`,
       '-acodec', 'pcm_s16le', '-ar', '16000',

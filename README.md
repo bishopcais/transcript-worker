@@ -1,8 +1,9 @@
 # Transcript-Worker
-
-## Requirements
 You must have **ffmpeg** installed.
-On a mac, you can use `brew install ffmpeg`.
+On a mac, you can use `brew install ffmpeg --with-opus --with-ffplay`.
+
+Note that this always uses the default device to capture audio,
+so make sure you set the correct default audio input device in your OS settings.
 
 To run this, you need to have a cog.json file in your package directory.
 The cog.json file needs to have at least the following fields:
@@ -31,7 +32,7 @@ The messages are published to RabbitMQ with the topic keys channelType.interim.t
 The "interim" channel only contains intermediate results while the "final" channel only has the full sentence results.
 You can use CELIO's transcript object to subscribe to these topics.
 
-The messages are JSON strings with the following format:
+The messages are javascript objects with the following format:
 ```javascript
 {
   channel: "channel_num",
@@ -40,6 +41,8 @@ The messages are JSON strings with the following format:
     alternatives: [{transcript: "message", confidence: 0.9}],
     final: true,
     keyword_result: {}
-  }
+  },
+  time_captured: unix_time,
+  messageId: "uuid_string",
 }
 ```

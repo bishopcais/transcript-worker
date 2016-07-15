@@ -64,7 +64,7 @@ let device;
       break;
     default:
       deviceInterface = 'alsa';
-      device = `hw:${io.config.get('device')}`;
+      device = `${io.config.get('device')}`;
       break;
  }
 

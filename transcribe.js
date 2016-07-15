@@ -33,7 +33,7 @@ const io = new CELIO();
 const transcript = io.getTranscript();
 const speaker = io.getSpeaker();
 
-io.config.required(['STT:username', 'STT:password', 'STT:version']);
+io.config.required(['STT:username', 'STT:password', 'STT:version', 'device']);
 io.config.defaults({
   'models': {
     generic: 'en-US_BroadbandModel'
@@ -56,15 +56,15 @@ let device;
  switch (process.platform) {
     case 'darwin':
       deviceInterface = 'avfoundation';
-      device = 'none:default';
+      device = `none:${io.config.get('device')}`;
       break;
     case 'win32':
       deviceInterface = 'dshow';
-      device = 'audio="0"';
+      device = `audio=${io.config.get('device')}`;
       break;
     default:
       deviceInterface = 'alsa';
-      device = 'hw:0';
+      device = `hw:${io.config.get('device')}`;
       break;
  }
 

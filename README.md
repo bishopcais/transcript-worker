@@ -21,11 +21,17 @@ The cog.json file needs to have at least the following fields:
     "password": "Your Password",
     "version": "v1"
   },
+  "device": "devicename",
   "channels": ["far"],
   "keywords": ["watson", "celia"],
   "keywords_threshold": 0.01
 }
 ```
+To find out device names:
+On Windows, use: `ffmpeg -list_devices true -f dshow -i dummy`.
+On Mac, use: `ffmpeg -list_devices true -f avfoundation -i dummy`.
+On Linux, use: `ffmpeg -list_devices true -f alsa -i dummy`
+
 The channels list the type of microphone for each channel.
 If you just want to transcribe one channel, you can use ["far"], for example.
 

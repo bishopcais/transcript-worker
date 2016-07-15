@@ -19,7 +19,7 @@ The cog.json file needs to have at least the following fields:
   "STT": {
     "username": "Your Watson STT username",
     "password": "Your Password",
-    "version" "v1"
+    "version": "v1"
   },
   "channels": ["far"],
   "keywords": ["watson", "celia"],

@@ -51,16 +51,20 @@ const currentModel = 'generic';
 const speech_to_text = watson.speech_to_text(io.config.get('STT'));
 
 let deviceInterface;
+let device;
 
  switch (process.platform) {
     case 'darwin':
       deviceInterface = 'avfoundation';
+      device = 'none:default';
       break;
     case 'win32':
       deviceInterface = 'dshow';
+      device = 'audio="0"';
       break;
     default:
       deviceInterface = 'alsa';
+      device = 'hw:0';
       break;
  }
 
@@ -92,7 +96,7 @@ function startCapture() {
     const p = spawn('ffmpeg', [
       '-v', 'error',
       '-f', deviceInterface,
-      '-i', 'none:default',
+      '-i', device,
       '-map_channel', `0.0.${i}`,
       '-acodec', 'pcm_s16le', '-ar', '16000',
       '-f', 'wav', '-']);

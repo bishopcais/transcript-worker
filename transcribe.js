@@ -9,6 +9,8 @@ if (!fs.existsSync('logs')) {
     fs.mkdirSync('logs');
 }
 
+function uuid(a){return a?(a^Math.random()*16>>a/4).toString(16):([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,uuid);};
+
 const logger = new (winston.Logger)({
   transports: [
     new winston.transports.File({
@@ -38,7 +40,8 @@ io.config.defaults({
   'models': {
     generic: 'en-US_BroadbandModel'
   },
-  'channels': ["far"]
+  'channels': ["far"],
+  'id': uuid()
 });
 
 const channelTypes = io.config.get('channels');
@@ -184,7 +187,7 @@ function transcribe() {
       const result = input.results[0];
 
       if (result) {
-        const msg = {channel: i, result: result};
+        const msg = {channelID: `${io.config.get('id')}:${i}`, result: result};
         if (result.final) {
           logger.info(JSON.stringify(msg));
         }

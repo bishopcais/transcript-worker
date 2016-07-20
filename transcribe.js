@@ -71,7 +71,7 @@ let device;
       break;
  }
 
-transcript.onSwitchModel(comm => {
+transcript.doSwitchModel(comm => {
   if (!models[comm.model]) {
     logger.info(`Cannot find the ${comm.model} model. Not switching.`);
   } else {

@@ -50,6 +50,7 @@ logger.info(`Transcribing ${channelTypes.length} channels.`);
 const channels = [];
 const models = io.config.get('models');
 const currentModel = 'generic';
+const speakerIDDuration = 5 * 60000; // 5 min
 
 let currentKeywords = new Set();
 if (fs.existsSync('keywords.json')) {
@@ -114,6 +115,16 @@ io.onTopic('stop-publishing.stt.command', ()=>{
   publish = false;
 });
 
+io.doCall(io.config.get('id'), msg=>{
+  const input = JSON.parse(msg.toString());
+  if (input.command === 'tag-channel') {
+    if (channels.length > input.channelIndex) {
+      logger.info(`Tagging channel ${input.channelIndex} with name: ${input.name}`);
+      channels[input.channelIndex].speaker = input.name;
+    }
+  }
+});
+
 function delayedRestart() {
   stopCapture();
 
@@ -172,6 +183,7 @@ function startCapture() {
     if (channels[i]) {
       channels[i].process = p;
       channels[i].stream = s;
+      channels[i].lastMessageTimeStamp = new Date();
     } else {
       channels.push({process:p, stream:s});
     }
@@ -222,10 +234,25 @@ function transcribe() {
       const result = input.results[0];
 
       if (result && publish) {
-        const msg = {channelID: `${io.config.get('id')}:${i}`, result: result};
+        // See if we should clear speaker name
+        if (channels[i].speaker && (new Date() - channels[i].lastMessageTimeStamp > speakerIDDuration)) {
+          logger.info(`Clear tag for channel ${i}.`);
+          channels[i].speaker = undefined;
+        }
+
+        const msg = {
+          workerID:io.config.get('id'),
+          channelIndex: i,
+          result: result,
+          speaker: channels[i].speaker
+        };
+
         if (result.final) {
           logger.info(JSON.stringify(msg));
+          channels[i].lastMessageTimeStamp = new Date();  
         }
+
+        
         transcript.publish(channelTypes[i], result.final, msg);
       }
 

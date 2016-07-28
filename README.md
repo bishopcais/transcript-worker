@@ -41,7 +41,8 @@ You can use CELIO's transcript object to subscribe to these topics.
 The messages are javascript objects with the following format:
 ```javascript
 {
-  channel: "channel_num",
+  workerID: "string"
+  channelIndex: num,
   speaker: "speaker_name (optional)",
   result: {
     alternatives: [{transcript: "message", confidence: 0.9}],
@@ -57,3 +58,4 @@ The messages are javascript objects with the following format:
 - Add keywords remotely.
 - Stop and resume listening. Listening is resumed with the folloing keywords: 'start listening', 'resume listening', and 'begin listening'.
 - Pause listening on far-range micrphone channels when the agent is speaking. 
+- Supports channel tagging. The channel tag is cleared after five minutes of silence.

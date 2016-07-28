@@ -27,7 +27,7 @@ const logger = new (winston.Logger)({
         humanReadableUnhandledException: true,
         json: false,
         colorize: true
-    }) 
+    })
   ]
 });
 
@@ -51,35 +51,67 @@ const channels = [];
 const models = io.config.get('models');
 const currentModel = 'generic';
 
+let currentKeywords = new Set();
+if (fs.existsSync('keywords.json')) {
+   currentKeywords = new Set(JSON.parse(fs.readFileSync('keywords.json', {encoding: 'utf8'})));
+}
+
+let currentKeywordsThreshold = 0.01;
+
 const speech_to_text = watson.speech_to_text(io.config.get('STT'));
 
 let deviceInterface;
 let device;
+let publish = true;
 
- switch (process.platform) {
-    case 'darwin':
-      deviceInterface = 'avfoundation';
-      device = `none:${io.config.get('device')}`;
-      break;
-    case 'win32':
-      deviceInterface = 'dshow';
-      device = `audio=${io.config.get('device')}`;
-      break;
-    default:
-      deviceInterface = 'alsa';
-      device = `${io.config.get('device')}`;
-      break;
- }
+switch (process.platform) {
+  case 'darwin':
+    deviceInterface = 'avfoundation';
+    device = `none:${io.config.get('device')}`;
+    break;
+  case 'win32':
+    deviceInterface = 'dshow';
+    device = `audio=${io.config.get('device')}`;
+    break;
+  default:
+    deviceInterface = 'alsa';
+    device = `${io.config.get('device')}`;
+    break;
+}
 
-transcript.doSwitchModel(comm => {
-  if (!models[comm.model]) {
-    logger.info(`Cannot find the ${comm.model} model. Not switching.`);
+io.onTopic('switch-model.stt.command', msg=>{
+  const model = msg.toString();
+  if (!models[model]) {
+    logger.info(`Cannot find the ${model} model. Not switching.`);
   } else {
-    logger.info(`Switching to the ${comm.model} model.`);
+    logger.info(`Switching to the ${model} model.`);
     
-    currentModel = comm.model;
+    currentModel = model;
     delayedRestart();
   }
+});
+
+io.onTopic('add-keywords.stt.command', msg=>{
+  const words = JSON.parse(msg.toString());
+  logger.info('Adding keywords', words);
+  const currentSize = currentKeywords.size;
+
+  for (let word of words) {
+    currentKeywords.add(word);
+  }
+
+  if (currentKeywords.size > currentSize) {
+    logger.info('New keywords', currentKeywords);
+    fs.writeFile('keywords.json', JSON.stringify([...currentKeywords]));
+    delayedRestart();
+  } else {
+    logger.info('All keywords already exist. Ignored.');
+  }
+});
+
+io.onTopic('stop-publishing.stt.command', ()=>{
+  logger.info('Stop publishing transcripts.');
+  publish = false;
 });
 
 function delayedRestart() {
@@ -163,16 +195,19 @@ function transcribe() {
   logger.info(`Starting all channels with the ${currentModel} model.`);
 
   for (let i = 0; i < channelTypes.length; i++) {
-    const sttStream = speech_to_text.createRecognizeStream({
+    const params = {
       content_type: 'audio/l16; rate=16000; channels=1',
       model: models[currentModel],
       inactivity_timeout: -1,
       smart_formatting: true,
       'x-watson-learning-opt-out': true,
-      interim_results: true,
-      keywords: io.config.get('keywords'),
-      keywords_threshold: io.config.get('keywords_threshold')
-    });
+      interim_results: true
+    };
+    if (currentKeywords.size > 0) {
+      params.keywords = [...currentKeywords];
+      params.keywords_threshold = currentKeywordsThreshold;
+    }
+    const sttStream = speech_to_text.createRecognizeStream(params);
 
     sttStream.on('error', (err) => {
       logger.error(err.message);
@@ -186,12 +221,20 @@ function transcribe() {
     textStream.on('results', input => {
       const result = input.results[0];
 
-      if (result) {
+      if (result && publish) {
         const msg = {channelID: `${io.config.get('id')}:${i}`, result: result};
         if (result.final) {
           logger.info(JSON.stringify(msg));
         }
         transcript.publish(channelTypes[i], result.final, msg);
+      }
+
+      if (!publish) {
+        t = result.alternatives[0].transcript;
+        if (t.indexOf('start listen') > -1 || t.indexOf('resume listen') > -1 || t.indexOf('begin listen') > -1) {
+          logger.info('Resume listening.');
+          publish = true;
+        }
       }
     });
   }

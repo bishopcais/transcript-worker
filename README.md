@@ -14,7 +14,6 @@ The cog.json file needs to have at least the following fields:
     "url": "mq url",
     "username": "username",
     "password": "password",
-    "exchange": "exchange name"
   },
   "STT": {
     "username": "Your Watson STT username",
@@ -23,21 +22,19 @@ The cog.json file needs to have at least the following fields:
   },
   "id": "ID to distinguish this transcript worker from others", 
   "device": "devicename",
-  "channels": ["far"],
-  "keywords": ["watson", "celia"],
-  "keywords_threshold": 0.01
+  "channels": ["far"]
 }
 ```
 To find out device names:
 On Windows, use: `ffmpeg -list_devices true -f dshow -i dummy`.
 On Mac, use: `ffmpeg -list_devices true -f avfoundation -i dummy`.
 On Linux, use: `arecord -L`.
-For Mac and Linux, you can also just use "default", and just choose the device from the system dialog.
+For Mac and Linux, you can also just use **default**, and choose the device from the system dialog.
 
-The channels list the type of microphone for each channel.
+The `channels` field lists the types of microphone for each channel.
 If you just want to transcribe one channel, you can use ["far"], for example.
 
-The messages are published to RabbitMQ with the topic keys channelType.interim.transcript and device.final.transcript.
+The messages are published to RabbitMQ with the topic keys channelType.interim.transcript and channelType.final.transcript.
 The "interim" channel only contains intermediate results while the "final" channel only has the full sentence results.
 You can use CELIO's transcript object to subscribe to these topics.
 
@@ -55,3 +52,8 @@ The messages are javascript objects with the following format:
   messageId: "uuid_string",
 }
 ```
+
+## Features
+- Add keywords remotely.
+- Stop and resume listening. Listening is resumed with the folloing keywords: 'start listening', 'resume listening', and 'begin listening'.
+- Pause listening on far-range micrphone channels when the agent is speaking. 

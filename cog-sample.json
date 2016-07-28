@@ -1,0 +1,15 @@
+{
+  "mq": {
+    "url": "url",
+    "username": "username",
+    "password": "password"
+  },
+  "id": "worker-id",
+  "STT": {
+    "username": "",
+    "password": "",
+    "version": "v1"
+  },
+  "channel": ["far"],
+  "device": "default"
+}

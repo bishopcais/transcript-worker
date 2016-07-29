@@ -115,11 +115,14 @@ io.onTopic('stop-publishing.stt.command', ()=>{
   publish = false;
 });
 
-io.doCall(`${io.config.get('id')}-tag-channel`, msg=>{
-  const input = JSON.parse(msg.toString());
+io.doCall(`${io.config.get('id')}-tag-channel`, (request, reply)=>{
+  const input = JSON.parse(request.content.toString());
   if (channels.length > input.channelIndex) {
     logger.info(`Tagging channel ${input.channelIndex} with name: ${input.name}`);
     channels[input.channelIndex].speaker = input.name;
+    reply('done');
+  } else {
+    reply('ignored');
   }
 });
 

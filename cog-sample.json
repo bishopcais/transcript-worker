@@ -10,6 +10,6 @@
     "password": "",
     "version": "v1"
   },
-  "channel": ["far"],
+  "channels": ["far"],
   "device": "default"
 }

@@ -127,16 +127,18 @@ io.doCall(`${io.config.get('id')}-tag-channel`, (request, reply)=>{
   }
 });
 
+let restarting = false;
 function delayedRestart() {
+  restarting = true;
   stopCapture();
 
-    // Restart capturing after 1 second.
+    // Restart capturing after 2 seconds.
     // I can't restart transcribing immediately, because I have to wait
     // the previous transcribe sessions to close, otherwise, the server will
     // reject my connections.
     setTimeout(() => {
       startCapture();
-    }, 1000);
+    }, 2000);
 };
 
 class IPCInputStream extends stream.Readable {
@@ -257,9 +259,11 @@ function transcribe() {
     const sttStream = speech_to_text.createRecognizeStream(params);
 
     sttStream.on('error', (err) => {
-      logger.error(err.message);
-      logger.info('An error occurred. Restarting capturing after 1 second.');
-      delayedRestart();
+      if (!restarting) {
+        logger.error(err.message);
+        logger.info('An error occurred. Restarting capturing after 1 second.');
+        delayedRestart();
+      }
     });
 
     const textStream = channels[i].stream.pipe(sttStream);

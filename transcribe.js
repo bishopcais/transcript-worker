@@ -4,6 +4,7 @@ const winston = require('winston');
 const watson = require('watson-developer-cloud');
 const stream = require('stream');
 const fs = require('fs');
+const RawIPC = require('node-ipc').IPC;
 
 if (!fs.existsSync('logs')) {
     fs.mkdirSync('logs');
@@ -138,9 +139,37 @@ function delayedRestart() {
     }, 1000);
 };
 
+class IPCInputStream extends stream.Readable {
+  constructor(options) {
+    super(options);
+    this.ipc = options.ipc;
+
+    const self = this;
+    options.ipc.serve();
+    options.ipc.server.on('data', (data, socket)=>{
+      self.push(data);
+    });
+    options.ipc.server.on('disconnect', (data, socket)=>{
+      self.push(null);
+    });
+
+    this.started = false;
+  }
+
+  _read() {
+    if (!this.started) {
+      this.ipc.server.start();
+      this.started = true;
+    }
+  }
+}
+
 function startCapture() {
   for (let i = 0; i < channelTypes.length; i++) {
-    const p = spawn('ffmpeg', [
+    let s;
+    let p = null;
+    if (io.config.get('device') !== 'IPC') {
+      p = spawn('ffmpeg', [
       '-v', 'error',
       '-f', deviceInterface,
       '-i', device,
@@ -148,12 +177,19 @@ function startCapture() {
       '-acodec', 'pcm_s16le', '-ar', '16000',
       '-f', 'wav', '-']);
 
-    p.stderr.on('data', data => {
-      logger.error(data.toString());
-      process.exit(1);
-    });
+      p.stderr.on('data', data => {
+        logger.error(data.toString());
+        process.exit(1);
+      });
 
-    let s;
+      s = p.stdout;
+    } else {
+      const ipc = new RawIPC;
+      ipc.config.rawBuffer = true;
+      ipc.config.id = 'audio-2';
+      ipc.config.encoding = 'hex';
+      s = new IPCInputStream({ipc});
+    }
 
     if (channelTypes[i] !== 'near') {
       let paused = false;
@@ -176,9 +212,7 @@ function startCapture() {
         callback();
       };
 
-      s = p.stdout.pipe(pausable);
-    } else {
-      s = p.stdout;
+      s = s.pipe(pausable);
     }
 
     if (channels[i]) {
@@ -269,3 +303,20 @@ function transcribe() {
 }
 
 startCapture();
+
+process.stdin.resume();//so the program will not close instantly
+
+function exitHandler(options, err) {
+    if (options.cleanup) stopCapture();
+    if (err) console.log(err.stack);
+    if (options.exit) process.exit();
+}
+
+//do something when app is closing
+process.on('exit', exitHandler.bind(null,{cleanup:true}));
+
+//catches ctrl+c event
+process.on('SIGINT', exitHandler.bind(null, {exit:true}));
+
+//catches uncaught exceptions
+process.on('uncaughtException', exitHandler.bind(null, {exit:true}));

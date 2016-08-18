@@ -1,4 +1,9 @@
 {
+  "run": "node",
+  "args": [
+    "transcribe.js"
+  ],
+  "watcher": "http://url:7777",
   "mq": {
     "url": "url",
     "username": "username",

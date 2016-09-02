@@ -186,8 +186,8 @@ function startCapture() {
     } else {
       const ipc = new RawIPC;
       ipc.config.rawBuffer = true;
-      ipc.config.appspace = 'transcript.';
-      ipc.config.id = 'audio-'+(i+1);
+      ipc.config.appspace = 'beam-';
+      ipc.config.id = 'transcript-'+i;
       ipc.config.encoding = 'hex';
       s = new IPCInputStream({ipc});
     }

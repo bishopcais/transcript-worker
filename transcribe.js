@@ -38,9 +38,7 @@ const speaker = io.getSpeaker();
 
 io.config.required(['STT:username', 'STT:password', 'STT:version', 'device']);
 io.config.defaults({
-  'models': {
-    generic: 'en-US_BroadbandModel'
-  },
+  'models': {},
   'channels': ["far"],
   'id': uuid()
 });
@@ -50,7 +48,7 @@ logger.info(`Transcribing ${channelTypes.length} channels.`);
 
 const channels = [];
 const models = io.config.get('models');
-const currentModel = 'generic';
+let currentModel = 'generic';
 const speakerIDDuration = 5 * 60000; // 5 min
 
 let currentKeywords = new Set();
@@ -188,7 +186,8 @@ function startCapture() {
     } else {
       const ipc = new RawIPC;
       ipc.config.rawBuffer = true;
-      ipc.config.id = 'audio-2';
+      ipc.config.appspace = 'transcript.';
+      ipc.config.id = 'audio-'+(i+1);
       ipc.config.encoding = 'hex';
       s = new IPCInputStream({ipc});
     }
@@ -242,16 +241,23 @@ function stopCapture() {
 
 function transcribe() {
   logger.info(`Starting all channels with the ${currentModel} model.`);
+  let rate = 16000;
+
+  if (io.config.get('device') === 'IPC') {
+    rate = 44100;
+  }
 
   for (let i = 0; i < channelTypes.length; i++) {
     const params = {
-      content_type: 'audio/l16; rate=16000; channels=1',
-      model: models[currentModel],
+      content_type: `audio/l16; rate=${rate}; channels=1`,
       inactivity_timeout: -1,
       smart_formatting: true,
       'x-watson-learning-opt-out': true,
       interim_results: true
     };
+    if (models[currentModel]) {
+      params['customization-local-path'] = models[currentModel];
+    }
     if (currentKeywords.size > 0) {
       params.keywords = [...currentKeywords];
       params.keywords_threshold = currentKeywordsThreshold;
@@ -260,9 +266,14 @@ function transcribe() {
 
     sttStream.on('error', (err) => {
       if (!restarting) {
-        logger.error(err.message);
-        logger.info('An error occurred. Restarting capturing after 1 second.');
-        delayedRestart();
+        if (err.message) {
+          logger.error(err.message);
+          logger.info('An error occurred. Restarting capturing after 1 second.');
+          delayedRestart();
+        } else {
+          logger.error('Cannot connect to the STT server.');
+          process.exit(1);
+        }
       }
     });
 
@@ -321,6 +332,7 @@ process.on('exit', exitHandler.bind(null,{cleanup:true}));
 
 //catches ctrl+c event
 process.on('SIGINT', exitHandler.bind(null, {exit:true}));
+process.on('SIGTERM', exitHandler.bind(null, {exit:true}));
 
 //catches uncaught exceptions
 process.on('uncaughtException', exitHandler.bind(null, {exit:true}));

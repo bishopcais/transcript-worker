@@ -1,11 +1,10 @@
 # Transcript-Worker
 
+## Requirements
 You must have **ffmpeg** installed.
 On a mac, you can use `brew install ffmpeg --with-opus --with-ffplay`.
 
-Note that this always uses the default device to capture audio,
-so make sure you set the correct default audio input device in your OS settings.
-
+## Configuration
 To run this, you need to have a cog.json file in your package directory.
 The cog.json file needs to have at least the following fields:
 ```json
@@ -56,6 +55,8 @@ The messages are javascript objects with the following format:
 
 ## Features
 - Add keywords remotely.
+- Support custom models and switching between models.
 - Stop and resume listening. Listening is resumed with the folloing keywords: 'start listening', 'resume listening', and 'begin listening'.
 - Pause listening on far-range micrphone channels when the agent is speaking. 
 - Supports channel tagging. The channel tag is cleared after five minutes of silence.
+- Supports reading audio from IPC channels.

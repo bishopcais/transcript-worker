@@ -192,7 +192,7 @@ function startCapture() {
       s = new IPCInputStream({ipc});
     }
 
-    if (channelTypes[i] !== 'near') {
+    if (channelTypes[i] === 'far') {
       let paused = false;
 
       speaker.onBeginSpeak(() => {
@@ -214,6 +214,9 @@ function startCapture() {
       };
 
       s = s.pipe(pausable);
+    } else if (channelTypes[i] === 'none') {
+      p = undefined;
+      s = undefined;
     }
 
     if (channels[i]) {
@@ -243,11 +246,11 @@ function transcribe() {
   logger.info(`Starting all channels with the ${currentModel} model.`);
   let rate = 16000;
 
-  if (io.config.get('device') === 'IPC') {
-    rate = 44100;
-  }
-
   for (let i = 0; i < channelTypes.length; i++) {
+    if (channelTypes[i] === 'none') {
+      continue;
+    }
+
     const params = {
       content_type: `audio/l16; rate=${rate}; channels=1`,
       inactivity_timeout: -1,

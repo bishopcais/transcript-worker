@@ -32,6 +32,7 @@ For Mac and Linux, you can also just use **default**, and choose the device from
 
 The `channels` field lists the types of microphone for each channel.
 If you just want to transcribe one channel, you can use ["far"], for example.
+The channel types can be far, near, or none. Far means far field microphone, none means not transcribing that channel.
 
 The messages are published to RabbitMQ with the topic keys channelType.interim.transcript and channelType.final.transcript.
 The "interim" channel only contains intermediate results while the "final" channel only has the full sentence results.

@@ -166,57 +166,56 @@ class IPCInputStream extends stream.Readable {
 
 function startCapture() {
   for (let i = 0; i < channelTypes.length; i++) {
-    let s;
-    let p = null;
-    if (io.config.get('device') !== 'IPC') {
-      p = spawn('ffmpeg', [
-      '-v', 'error',
-      '-f', deviceInterface,
-      '-i', device,
-      '-map_channel', `0.0.${i}`,
-      '-acodec', 'pcm_s16le', '-ar', '16000',
-      '-f', 'wav', '-']);
+    let s, p;
 
-      p.stderr.on('data', data => {
-        logger.error(data.toString());
-        process.exit(1);
-      });
+    if (channelTypes[i] !== 'none') {
+      if (io.config.get('device') !== 'IPC') {
+        p = spawn('ffmpeg', [
+        '-v', 'error',
+        '-f', deviceInterface,
+        '-i', device,
+        '-map_channel', `0.0.${i}`,
+        '-acodec', 'pcm_s16le', '-ar', '16000',
+        '-f', 'wav', '-']);
 
-      s = p.stdout;
-    } else {
-      const ipc = new RawIPC;
-      ipc.config.rawBuffer = true;
-      ipc.config.appspace = 'beam-';
-      ipc.config.id = 'transcript-'+i;
-      ipc.config.encoding = 'hex';
-      s = new IPCInputStream({ipc});
-    }
+        p.stderr.on('data', data => {
+          logger.error(data.toString());
+          process.exit(1);
+        });
 
-    if (channelTypes[i] === 'far') {
-      let paused = false;
+        s = p.stdout;
+      } else {
+        const ipc = new RawIPC;
+        ipc.config.rawBuffer = true;
+        ipc.config.appspace = 'beam-';
+        ipc.config.id = 'transcript-'+i;
+        ipc.config.encoding = 'hex';
+        s = new IPCInputStream({ipc});
+      }
 
-      speaker.onBeginSpeak(() => {
-        logger.info(`Pausing channel ${i}`);
-        paused = true;
-      });
+      if (channelTypes[i] === 'far') {
+        let paused = false;
 
-      speaker.onEndSpeak(() => {
-        logger.info(`Resuming channel ${i}`);
-        paused = false;
-      });
+        speaker.onBeginSpeak(() => {
+          logger.info(`Pausing channel ${i}`);
+          paused = true;
+        });
 
-      const pausable = new stream.Transform();
-      pausable._transform = function(chunk, encoding, callback) {
-        if (!paused) {
-          this.push(chunk);
-        }
-        callback();
-      };
+        speaker.onEndSpeak(() => {
+          logger.info(`Resuming channel ${i}`);
+          paused = false;
+        });
 
-      s = s.pipe(pausable);
-    } else if (channelTypes[i] === 'none') {
-      p = undefined;
-      s = undefined;
+        const pausable = new stream.Transform();
+        pausable._transform = function(chunk, encoding, callback) {
+          if (!paused) {
+            this.push(chunk);
+          }
+          callback();
+        };
+
+        s = s.pipe(pausable);
+      }
     }
 
     if (channels[i]) {

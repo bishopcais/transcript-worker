@@ -1,0 +1,27 @@
+{
+  "run": "npm",
+  "args": [
+    "start"
+  ],
+  "watcher": "http://localhost:7777",
+  "id": "transcript-worker",
+  "description": "STT for applications",
+  "tags": ["sst", "worker"],
+  "log": "transcript-worker.log",
+  "mq": {
+    "url": "localhost",
+    "username": "guest",
+    "password": "guest",
+    "exchange": "amq.topic"
+  },
+  "STT": {
+    "url": "https://stream.watsonplatform.net/speech-to-text/api",
+    "username": "d48f619f-5c4a-4103-bd76-45ade139c0a2",
+    "password": "Aba5WsrMRR4i",
+    "version": "v1"
+  },
+  "channels": ["far"],
+  "keywords": ["watson", "celia"],
+  "device": "Built-in Microphone",
+  "keywords_threshold": 0.01
+}

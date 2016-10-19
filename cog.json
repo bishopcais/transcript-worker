@@ -6,7 +6,7 @@
   "watcher": "http://localhost:7777",
   "id": "transcript-worker",
   "description": "STT for applications",
-  "tags": ["sst", "worker"],
+  "tags": ["tts", "worker"],
   "log": "transcript-worker.log",
   "mq": {
     "url": "localhost",

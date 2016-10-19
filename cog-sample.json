@@ -4,6 +4,10 @@
     "transcribe.js"
   ],
   "watcher": "http://url:7777",
+  "id": "transcript-worker",
+  "description": "STT for applications",
+  "tags": ["stt", "worker"],
+  "log": "transcript-worker.log",
   "mq": {
     "url": "url",
     "username": "username",

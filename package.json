@@ -1,6 +1,6 @@
 {
   "name": "transcript-worker",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "main": "transcribe.js",
   "scripts": {
     "start": "node transcribe.js"

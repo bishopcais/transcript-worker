@@ -112,8 +112,8 @@ io.onTopic('stopPublishing.transcript.command', () => {
 io.doCall(`rpc-transcript-${io.config.get('id')}-tagChannel`, (request, reply) => {
     const input = JSON.parse(request.content.toString())
     if (channels.length > input.channelIndex) {
-        logger.info(`Tagging channel ${input.channelIndex} with name: ${input.name}`)
-        channels[input.channelIndex].speaker = input.name
+        logger.info(`Tagging channel ${input.channelIndex} with name: ${input.speaker}`)
+        channels[input.channelIndex].speaker = input.speaker
         reply('done')
     } else {
         reply('ignored')

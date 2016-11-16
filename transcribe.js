@@ -34,6 +34,7 @@ io.config.required(['STT:username', 'STT:password', 'device'])
 io.config.defaults({
     'models': {},
     'channels': ['far'],
+    'default_model': 'generic',
     'id': io.generateUUID()
 })
 
@@ -42,7 +43,7 @@ logger.info(`Transcribing ${channelTypes.length} channels.`)
 
 const channels = []
 const models = io.config.get('models')
-let currentModel = 'generic'
+let currentModel = io.config.get('default_model')
 const speakerIDDuration = 5 * 60000 // 5 min
 
 let currentKeywords
@@ -238,7 +239,7 @@ function transcribe() {
             interim_results: true
         }
         if (models[currentModel]) {
-            params['customization-local-path'] = models[currentModel]
+            params.headers = {'customization-local-path': models[currentModel]}
         }
         if (currentKeywords && currentKeywords.length > 0) {
             params.keywords = currentKeywords

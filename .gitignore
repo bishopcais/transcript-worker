@@ -3,3 +3,4 @@ cog*.json
 .vscode
 logs
 npm-debug.log
+TODO.md

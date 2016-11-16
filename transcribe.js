@@ -1,7 +1,7 @@
 const spawn = require('child_process').spawn
 const CELIO = require('celio')
 const winston = require('winston')
-const watson = require('watson-developer-cloud')
+const SpeechToTextV1 = require('watson-developer-cloud/speech-to-text/v1')
 const stream = require('stream')
 const fs = require('fs')
 const RawIPC = require('node-ipc').IPC
@@ -22,8 +22,7 @@ const logger = new (winston.Logger)({
         }),
         new winston.transports.Console({
             level: 'info',
-            handleExceptions: false,
-            humanReadableUnhandledException: true,
+            handleExceptions: true,
             json: false,
             colorize: true
         })
@@ -31,7 +30,7 @@ const logger = new (winston.Logger)({
 })
 
 const io = new CELIO()
-io.config.required(['STT:username', 'STT:password', 'STT:version', 'device'])
+io.config.required(['STT:username', 'STT:password', 'device'])
 io.config.defaults({
     'models': {},
     'channels': ['far'],
@@ -46,14 +45,19 @@ const models = io.config.get('models')
 let currentModel = 'generic'
 const speakerIDDuration = 5 * 60000 // 5 min
 
-let currentKeywords = new Set()
-if (fs.existsSync('keywords.json')) {
-    currentKeywords = new Set(JSON.parse(fs.readFileSync('keywords.json', { encoding: 'utf8' })))
-}
+let currentKeywords
+io.store.getSet('transcript:keywords').then(keywords => (currentKeywords = keywords))
+io.store.onChange('transcript:keywords', () => {
+    io.store.getSet('transcript:keywords').then(keywords => {
+        currentKeywords = keywords
+        logger.info('New keywords', currentKeywords)
+        delayedRestart()
+    })
+})
 
 let currentKeywordsThreshold = 0.01
 
-const speech_to_text = watson.speech_to_text(io.config.get('STT'))
+const speech_to_text = new SpeechToTextV1(io.config.get('STT'))
 
 let deviceInterface
 let device
@@ -83,24 +87,6 @@ io.onTopic('switchModel.transcript.command', msg => {
 
         currentModel = model
         delayedRestart()
-    }
-})
-
-io.onTopic('addKeywords.transcript.command', msg => {
-    const words = JSON.parse(msg.toString())
-    logger.info('Adding keywords', words)
-    const currentSize = currentKeywords.size
-
-    for (let word of words) {
-        currentKeywords.add(word)
-    }
-
-    if (currentKeywords.size > currentSize) {
-        logger.info('New keywords', currentKeywords)
-        fs.writeFile('keywords.json', JSON.stringify([...currentKeywords]))
-        delayedRestart()
-    } else {
-        logger.info('All keywords already exist. Ignored.')
     }
 })
 
@@ -238,7 +224,6 @@ function stopCapture() {
 
 function transcribe() {
     logger.info(`Starting all channels with the ${currentModel} model.`)
-    let rate = 16000
 
     for (let i = 0; i < channelTypes.length; i++) {
         if (channelTypes[i] === 'none') {
@@ -246,17 +231,17 @@ function transcribe() {
         }
 
         const params = {
-            content_type: `audio/l16; rate=${rate}; channels=1`,
+            content_type: `audio/l16; rate=16000; channels=1`,
             inactivity_timeout: -1,
             smart_formatting: true,
-            'x-watson-learning-opt-out': true,
+            customization_id: io.config.get('STT:customization_id'),
             interim_results: true
         }
         if (models[currentModel]) {
             params['customization-local-path'] = models[currentModel]
         }
-        if (currentKeywords.size > 0) {
-            params.keywords = [...currentKeywords]
+        if (currentKeywords && currentKeywords.length > 0) {
+            params.keywords = currentKeywords
             params.keywords_threshold = currentKeywordsThreshold
         }
         const sttStream = speech_to_text.createRecognizeStream(params)

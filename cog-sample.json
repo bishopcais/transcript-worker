@@ -3,17 +3,20 @@
   "args": [
     "transcribe.js"
   ],
-  "watcher": "http://url:7777",
+  "watcher": "",
   "mq": {
-    "url": "url",
-    "username": "username",
-    "password": "password"
+    "url": "",
+    "username": "",
+    "password": ""
   },
-  "id": "worker-id",
+  "store": {
+    "url": ""
+  },
+  "id": "",
   "STT": {
     "username": "",
     "password": "",
-    "version": "v1"
+    "customization_id": "optional"
   },
   "channels": ["far"],
   "device": "default"

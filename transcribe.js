@@ -1,5 +1,5 @@
 const spawn = require('child_process').spawn
-const CELIO = require('celio')
+const CELIO = require('@cel/celio')
 const winston = require('winston')
 const SpeechToTextV1 = require('watson-developer-cloud/speech-to-text/v1')
 const stream = require('stream')

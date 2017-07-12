@@ -291,10 +291,6 @@ function transcribe() {
                     logger.info(JSON.stringify(msg))
                     channels[i].lastMessageTimeStamp = new Date()
                 }
-
-                if (result.final) {
-                    console.log('result: \n' + JSON.stringify(result, null, 2));
-                }
                 io.transcript.publish(channelTypes[i], result.final, msg)
             }
 

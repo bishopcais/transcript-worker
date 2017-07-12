@@ -3,6 +3,7 @@ const spawn = require('child_process').spawn
 const CELIO = require('@cel/celio')
 const winston = require('winston')
 const SpeechToTextV1 = require('watson-developer-cloud/speech-to-text/v1')
+//const SpeechToTextV1 = require('./v1')
 const stream = require('stream')
 const fs = require('fs')
 const RawIPC = require('node-ipc').IPC
@@ -39,7 +40,7 @@ io.config.defaults({
     'id': io.generateUUID()
 })
 
-const channelTypes = io.config.get('channels')
+var channelTypes = io.config.get('channels')
 logger.info(`Transcribing ${channelTypes.length} channels.`)
 
 const channels = []
@@ -79,6 +80,15 @@ switch (process.platform) {
         device = `${io.config.get('device')}`
         break
 }
+io.onTopic('switchLanguage.transcript.command', msg =>{
+  stopCapture();
+  msg = JSON.parse(msg);
+  langs = msg.micLang;
+  for (let i = 0; i<channelTypes.length - 1 && i< langs.length; ++i){
+    channelTypes[i+1] = langs[i];
+  }
+  startCapture();
+})
 
 io.onTopic('switchModel.transcript.command', msg => {
     const model = msg.toString()
@@ -107,7 +117,6 @@ io.doCall(`rpc-transcript-${io.config.get('id')}-tagChannel`, (request, reply) =
         reply('ignored')
     }
 })
-
 let restarting = false
 function delayedRestart() {
     restarting = true
@@ -231,12 +240,20 @@ function transcribe() {
         if (channelTypes[i] === 'none') {
             continue
         }
+        var current_model;
+
+        if(channelTypes[i] === "en-US")
+          current_model="en-US_BroadbandModel";
+        else if(channelTypes[i] === "zh-CN")
+          current_model="zh-CN_BroadbandModel";
+
 
         const params = {
+            //model: current_model,
             content_type: `audio/l16; rate=16000; channels=1`,
             inactivity_timeout: -1,
             smart_formatting: true,
-            customization_id: io.config.get('STT:customization_id'),
+            //customization_id: io.config.get('STT:customization_id'),
             interim_results: true
         }
         if (models[currentModel]) {
@@ -281,6 +298,7 @@ function transcribe() {
 
                 const msg = {
                     workerID: io.config.get('id'),
+                    channelName: channelTypes[i],
                     channelIndex: i,
                     result: result,
                     speaker: channels[i].speaker,

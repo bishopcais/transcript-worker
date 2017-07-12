@@ -1,3 +1,4 @@
+const _ = require('lodash');
 const spawn = require('child_process').spawn
 const CELIO = require('@cel/celio')
 const winston = require('winston')
@@ -273,11 +274,17 @@ function transcribe() {
                     channels[i].speaker = undefined
                 }
 
+                let total_time = 0;
+                if (result.final && result.alternatives && result.alternatives[0].timestamps) {
+                    total_time = _.last(_.last(result.alternatives[0].timestamps));
+                }
+
                 const msg = {
                     workerID: io.config.get('id'),
                     channelIndex: i,
                     result: result,
-                    speaker: channels[i].speaker
+                    speaker: channels[i].speaker,
+                    total_time: total_time
                 }
 
                 if (result.final) {
@@ -285,6 +292,9 @@ function transcribe() {
                     channels[i].lastMessageTimeStamp = new Date()
                 }
 
+                if (result.final) {
+                    console.log('result: \n' + JSON.stringify(result, null, 2));
+                }
                 io.transcript.publish(channelTypes[i], result.final, msg)
             }
 

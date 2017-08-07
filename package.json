@@ -1,6 +1,6 @@
 {
   "name": "transcript-worker",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "main": "transcribe.js",
   "scripts": {
     "start": "node transcribe.js"
@@ -8,9 +8,9 @@
   "author": "Yunfeng Zhang",
   "private": true,
   "dependencies": {
-    "celio": "^1.0.0",
+    "@cel/celio": "^2.0.0",
     "node-ipc": "^8.1.1",
-    "watson-developer-cloud": "^1.3.3",
+    "watson-developer-cloud": "^2.9.0",
     "winston": "^2.2.0"
   }
 }

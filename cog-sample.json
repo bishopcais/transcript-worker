@@ -9,15 +9,18 @@
   "tags": ["stt", "worker"],
   "log": "transcript-worker.log",
   "mq": {
-    "url": "url",
-    "username": "username",
-    "password": "password"
+    "url": "",
+    "username": "",
+    "password": ""
   },
-  "id": "worker-id",
+  "store": {
+    "url": ""
+  },
+  "id": "",
   "STT": {
     "username": "",
     "password": "",
-    "version": "v1"
+    "customization_id": "optional"
   },
   "channels": ["far"],
   "device": "default"

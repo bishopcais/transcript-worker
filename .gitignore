@@ -1,2 +1,7 @@
 node_modules
-cog.json
+*cog.json
+.vscode
+logs
+npm-debug.log
+TODO.md
+*.log

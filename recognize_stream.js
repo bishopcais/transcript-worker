@@ -1,13 +1,14 @@
 //var WebSocket = require("ws");
-var fs = require('fs');
 //var Blob = fs.readFileSync('./sample.wav');
-const Duplex = require('stream').Duplex;
-const util = require('util');
-const extend = require('extend');
-const pick = require('object.pick');
-const W3CWebSocket = require('websocket').w3cwebsocket;
+var Duplex = require('stream').Duplex;
+var util = require('util');
+var extend = require('extend');
+var pick = require('object.pick');
+var W3CWebSocket = require('websocket').w3cwebsocket;
 
-var OPENING_MESSAGE_PARAMS_ALLOWED = ['action', 'format', 'vad', 'interim_results'];
+var OPENING_MESSAGE_PARAMS_ALLOWED = ['action', 'format', 'vad', 'continuous', 'max_alternatives', 'timestamps', 'word_confidence', 'inactivity_timeout', 'interim_results', 'keywords', 'keywords_threshold', 'word_alternatives_threshold', 'profanity_filter', 'smart_formatting' ];
+
+//var OPENING_MESSAGE_PARAMS_ALLOWED = ['action', 'format', 'vad', 'interim_results'];
 
 function RecognizeStream(options) {
   //console.log(options);
@@ -20,19 +21,27 @@ util.inherits(RecognizeStream, Duplex);
 
 RecognizeStream.prototype.initialize = function() {
   const options = this.options;
+  //console.log(options['content_type']);
+  //console.log(options.content_type);
+  if (options.content_type && !options['content-type']) {
+    options['content-type'] = options.content_type;
+  }
 
   const url = (options.url || 'wss://crl.ptopenlab.com:8800/asr/api/decode').replace(/^http/, 'ws');
-  //console.log(url);
 //var wsURI = 'ws://localhost:8080/asr/api/decode';
   //var websocket = new WebSocket(wsURI);
 
-  var openingMessage = {'action': 'start', 'format': 'audio/l16', 'continuous': true, 'interim_results': true};
+
+  var openingMessage = extend({action: 'start', 'format': 'audio/wav', 'vad': true, 'interim_results': true,
+      word_confidence: true,
+      continuous: true,
+      timestamps: true,
+      max_alternatives: 3,
+      inactivity_timeout: 600}, pick(options, OPENING_MESSAGE_PARAMS_ALLOWED));
   var closingMessage = {'action': 'stop'};
 
-  //console.log(openingMessage);
-
-  const self = this;
-  const socket = (this.socket = new W3CWebSocket(url, null, null, options.headers, null));
+  var self = this;
+  var socket = this.socket = new W3CWebSocket(url, null, null, options.headers, null);
 
   self.on('finish', function() {
     if (self.socket && self.socket.readyState === W3CWebSocket.OPEN) {
@@ -73,11 +82,11 @@ RecognizeStream.prototype.initialize = function() {
   }
 
   socket.onmessage=function(frame){
-
+    console.log('recognition result in json format' + frame.data);
     if (typeof frame.data !== 'string') {
       return emitError('Unexpected binary data received from server', frame);
     }
-    console.log('recognition result in json format: ' + frame.data);
+    //console.log('recognition result in json format: ' + frame.data);
     let data;
     try {
       data = JSON.parse(frame.data);
@@ -85,17 +94,14 @@ RecognizeStream.prototype.initialize = function() {
     } catch (jsonEx) {
       return emitError('Invalid JSON received from service:', frame, jsonEx);
     }
-    console.log(data.results);
-    console.log(data.result);
 
-    let recognized = false;
-    if (data.state === 'error') {
-      console.log('error');
+    if (data.error) {
       emitError(data.error, frame);
       recognized = true;
     }
 
     if (data.state === 'listening') {
+      // this is emitted both when the server is ready for audio, and after we send the close message to indicate that it's done processing
       if (!self.listening) {
         self.listening = true;
         self.emit('listening');
@@ -105,42 +111,34 @@ RecognizeStream.prototype.initialize = function() {
       }
       recognized = true;
     }
-
-    if (data.result) {
-      console.log('result');
+    if (data.state == null) {
       self.emit('results', data);
-      if (data.results[0] && data.results[0].final && data.results[0].alternatives) {
-        self.push(data.results[0].alternatives[0].transcript, 'utf8'); // this is the "data" event that can be easily piped to other streams
+      if (data.final){
+        self.push(data.results, 'utf8');    // this is the "data" event that can be easily piped to other streams
+        //console.log('recognition result in json format' + frame.data);
       }
       recognized = true;
     }
 
+    if (data.state === 'stopped'){
+      //console.log('stopped');
+      socket.send(JSON.stringify(closingMessage));
+      socket.send(JSON.stringify(openingMessage));
+      self.emit('connect');
+      recognized = true;
+    }
     if (!recognized) {
       emitError('Unrecognised message from server', frame);
     }
+    this.initialized = true;
 
-/*
-    var current = JSON.parse(evt.data);
-    console.log('recognition result in json format: ' + evt.data);
-    var check = current.state;
-    if (check == null){
-      console.log(current.final + '--' + current.results);
-      return;
-    }
-
-    if (check == 'listening'){
-      console.log('HERE??');
-    }
-    if (check == 'stopped'){
-      //console.log('HELLO??'+ current.info);
-      onclose();
-    }
-*/
-  }
-}
+  };
+};
 
   RecognizeStream.prototype._read = function(/* size*/) {
+
   };
+
   RecognizeStream.prototype._write = function(chunk, encoding, callback) {
    const self = this;
    if (self.listening) {
@@ -149,14 +147,14 @@ RecognizeStream.prototype.initialize = function() {
    }
    else {
      if (!this.initialized) {
-       if (!this.options['format']) {
-         this.options['format'] = RecognizeStream.getContentType(chunk);
+       if (!this.options['content_type']) {
+         this.options['content_type'] = RecognizeStream.getContentType(chunk);
        }
        this.initialize();
      }
      this.once('listening', function() {
        self.socket.send(chunk);
-       self.afterSend(callback);
+       this.afterSend(callback);
      });
     }
    };
@@ -175,17 +173,15 @@ RecognizeStream.prototype.initialize = function() {
     this.socket.close();
   };
 
-const headerToContentType = {
+var headerToContentType = {
   fLaC: 'audio/flac',
   RIFF: 'audio/wav',
   OggS: 'audio/ogg',
-  '\u001aEߣ': 'audio/webm' // String for first four hex's of webm: [1A][45][DF][A3] (https://www.matroska.org/technical/specs/index.html#EBML)
 };
+
 RecognizeStream.getContentType = function(buffer) {
-  const header = buffer.slice(0, 4).toString();
+  var header = buffer.slice(0, 4).toString();
   return headerToContentType[header];
 };
 
-
 module.exports = RecognizeStream;
-//RecognizeStream();

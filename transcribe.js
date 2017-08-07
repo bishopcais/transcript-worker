@@ -83,6 +83,7 @@ switch (process.platform) {
 io.onTopic('switchLanguage.transcript.command', msg =>{
   stopCapture();
   msg = JSON.parse(msg);
+  console.log('SWITCHING');
   langs = msg.micLang;
   for (let i = 0; i<channelTypes.length - 1 && i< langs.length; ++i){
     channelTypes[i+1] = langs[i];
@@ -249,13 +250,16 @@ function transcribe() {
 
 
         const params = {
-            //model: current_model,
+            model: current_model,
             content_type: `audio/l16; rate=16000; channels=1`,
             inactivity_timeout: -1,
             smart_formatting: true,
-            //customization_id: io.config.get('STT:customization_id'),
             interim_results: true
+        };
+        if (current_model === "en-US_BroadbandModel") {
+          params.customization_id = io.config.get('STT:customization_id');
         }
+
         if (models[currentModel]) {
             params.headers = {'customization-local-path': models[currentModel]}
         }
@@ -282,8 +286,8 @@ function transcribe() {
 
         textStream.setEncoding('utf8')
         textStream.on('results', input => {
-            const result = input.results[0]
 
+            const result = input.results[0]
             if (result && publish) {
                 // See if we should clear speaker name
                 if (channels[i].speaker && (new Date() - channels[i].lastMessageTimeStamp > speakerIDDuration)) {
@@ -304,12 +308,12 @@ function transcribe() {
                     speaker: channels[i].speaker,
                     total_time: total_time
                 }
-
                 if (result.final) {
                     logger.info(JSON.stringify(msg))
                     channels[i].lastMessageTimeStamp = new Date()
                 }
                 io.transcript.publish(channelTypes[i], result.final, msg)
+
             }
 
             if (!publish) {
@@ -319,6 +323,35 @@ function transcribe() {
                     publish = true
                 }
             }
+
+            //test code for chinese service from wen & kelvin
+            /*
+            const result = input.results
+            if (result && publish){
+                if (channels[i].speaker && (new Date() - channels[i].lastMessageTimeStamp > speakerIDDuration)) {
+                    logger.info(`Clear tag for channel ${i}.`)
+                    channels[i].speaker = undefined
+                }
+                const msg = {
+                    workerID: io.config.get('id'),
+                    channelName: channelTypes[i],
+                    channelIndex: i,
+                    result: result,
+                    speaker: channels[i].speaker
+                }
+                if (input.final){
+                    logger.info(JSON.stringify(msg))
+                    channels[i].lastMessageTimeStamp = new Date()
+                }
+                io.transcript.publish(channelTypes[i], input.final, msg)
+            }
+            if (!publish) {
+                if (result.indexOf('start listen') > -1 || result.indexOf('resume listen') > -1 || result.indexOf('begin listen') > -1) {
+                    logger.info('Resume listening.')
+                    publish = true
+                }
+            }*/
+
         })
     }
 }

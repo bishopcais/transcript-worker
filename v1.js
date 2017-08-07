@@ -65,7 +65,7 @@ function SpeechToTextV1(options) {
 util.inherits(SpeechToTextV1, BaseService);
 SpeechToTextV1.prototype.name = 'speech_to_text';
 SpeechToTextV1.prototype.version = 'v1';
-SpeechToTextV1.URL = 'https://129.161.106.119/asr/api/decode';
+SpeechToTextV1.URL = 'wss://crl.ptopenlab.com:8800/asr/api/decode';
 
 /**
  * Speech recognition for given audio using default model.
@@ -360,6 +360,7 @@ SpeechToTextV1.prototype.createRecognizeStream = function(params) {
     'user-agent': pkg.name + '-nodejs-'+ pkg.version,
     authorization:  this._options.headers.Authorization
   }, params.headers);
+
 
   return new RecognizeStream(params);
 };

@@ -3,13 +3,13 @@
   "args": [
     "transcribe.js"
   ],
-  "watcher": "http://129.161.106.58:7777",
+  "watcher": "http://128.113.21.131:7777",
   "id": "multichannel-transcript-worker",
   "description": "STT for applications",
   "tags": ["tts", "worker"],
   "log": "transcript-worker.log",
   "mq": {
-    "url": "129.161.106.58",
+    "url": "128.113.21.131",
     "username": "audio",
     "password": "audio",
     "exchange": "amq.topic"
@@ -22,7 +22,7 @@
     "customization_id": "d8e0d680-8653-11e6-bae7-1583ef8b8b73"
   },
   "store": {
-    "url": "129.161.106.58:6379"
+    "url": "128.113.21.131:6379"
   },
   "channels": ["en-US", "en-US", "en-US", "zh-CN", "zh-CN", "zh-CN"],
   "keywords": ["watson", "celia"],

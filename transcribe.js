@@ -84,10 +84,16 @@ io.onTopic('switchLanguage.transcript.command', msg =>{
   stopCapture();
   msg = JSON.parse(msg);
   console.log('SWITCHING');
-  langs = msg.micLang;
-  for (let i = 0; i<channelTypes.length - 1 && i< langs.length; ++i){
-    channelTypes[i+1] = langs[i];
+  if (msg.hasOwnProperty('id') && msg.id > 0) {
+    channelTypes[msg.id] = msg.lang;
   }
+  else {
+    langs = msg.micLang;
+    for (let i = 1; i<channelTypes.length && i< langs.length; ++i){
+      channelTypes[i] = langs[i];
+    }
+  }
+  logger.info(channelTypes);
   startCapture();
 })
 
@@ -109,6 +115,7 @@ io.onTopic('stopPublishing.transcript.command', () => {
 })
 
 io.doCall(`rpc-transcript-${io.config.get('id')}-tagChannel`, (request, reply) => {
+  logger.info('tagging');
     const input = JSON.parse(request.content.toString())
     if (channels.length > input.channelIndex) {
         logger.info(`Tagging channel ${input.channelIndex} with name: ${input.speaker}`)
@@ -310,6 +317,12 @@ function transcribe() {
                 }
                 if (result.final) {
                     logger.info(JSON.stringify(msg))
+                    io.publishTopic('command.firstplayable.client',JSON.stringify({
+                      'type':'chat_log_append',
+                      'details':{
+                        'text':msg.result.alternatives[0].transcript
+                      }
+                    }))
                     channels[i].lastMessageTimeStamp = new Date()
                 }
                 io.transcript.publish(channelTypes[i], result.final, msg)

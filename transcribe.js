@@ -7,6 +7,15 @@ const SpeechToTextV1 = require('watson-developer-cloud/speech-to-text/v1')
 const stream = require('stream')
 const fs = require('fs')
 const RawIPC = require('node-ipc').IPC
+const wav = require('wav')
+const tone   = require('tonegenerator');
+const play = require('play')
+var AudioBuffer = require('audiobuffer')
+
+
+// var audioBuffer = require("n")
+// const CircularBuffer = require("circular-buffer");
+
 
 if (!fs.existsSync('logs')) {
     fs.mkdirSync('logs')
@@ -182,8 +191,8 @@ function startCapture() {
                     logger.error(data.toString())
                     process.exit(1)
                 })
-
                 s = p.stdout
+
             } else {
                 const ipc = new RawIPC()
                 ipc.config.rawBuffer = true
@@ -289,11 +298,42 @@ function transcribe() {
             }
         })
 
+
+        var fileWriter = new wav.FileWriter('kasra.wav', {
+            channels: 1,
+            sampleRate: 44100,
+            bitDepth: 16
+        });
+
+        var audioBuffer = new AudioBuffer(1, 100000, 44100)
         const textStream = channels[i].stream.pipe(sttStream)
+
+
+        // const audioStream = channels[i].stream.pipe(fileWriter)
+        //stream.pipe(fileWriter, { end: false });
+
+
+
+        //console.log(textStream)
+      //   var audioBuffer = new AudioBuffer(1, 100000, 44100)
+      //   var audioBuffer = AudioBuffer.fromArray([
+      //         [1, 0.5, 0.2, 1, 0.5],
+      //         [-1, -0.8, -0.7, -0.6, 0.3]], 22050)
+      //
+      // var writer = new wav.Writer();
+      //
+      // writer.pipe(fs.createWriteStream('test_.wav'));
+      //
+      // writer.write(new Buffer(tone(220, 5)));
+      // writer.end();
+
+
+
 
         textStream.setEncoding('utf8')
         textStream.on('results', input => {
-
+            console.log("we got a result..")
+            console.log(channels[0].process)
             const result = input.results[0]
             if (result && publish) {
                 // See if we should clear speaker name
@@ -315,6 +355,12 @@ function transcribe() {
                     speaker: channels[i].speaker,
                     total_time: total_time
                 }
+                var wordData = result["alternatives"][0]["timestamps"]
+                console.log("Result Var: " + result["alternatives"][0]["timestamps"])
+                // play.sound('test.wav')
+
+
+
                 if (result.final) {
                     logger.info(JSON.stringify(msg))
                     io.publishTopic('command.firstplayable.client',JSON.stringify({

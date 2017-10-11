@@ -9,9 +9,14 @@
   "private": true,
   "dependencies": {
     "@cel/celio": "^2.0.0",
+    "audio-buffer": "^4.0.2",
+    "audiobuffer": "^0.2.0",
+    "audiobuffer-to-wav": "^1.0.0",
     "node-ipc": "^8.1.1",
     "play": "^0.5.0",
     "watson-developer-cloud": "^2.9.0",
+    "wav": "^1.0.1",
+    "waveheader": "0.0.2",
     "winston": "^2.2.0"
   }
 }

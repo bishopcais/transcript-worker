@@ -8,8 +8,9 @@ const stream = require('stream')
 const fs = require('fs')
 const RawIPC = require('node-ipc').IPC
 const wav = require('wav')
-const tone   = require('tonegenerator');
-const play = require('play')
+const header = require('waveheader')
+// const tone   = require('tonegenerator');
+// const play = require('play')
 var AudioBuffer = require('audiobuffer')
 
 
@@ -174,11 +175,13 @@ class IPCInputStream extends stream.Readable {
 }
 
 function startCapture() {
+  console.log("hello starting capture..")
     for (let i = 0; i < channelTypes.length; i++) {
         let s, p
 
         if (channelTypes[i] !== 'none') {
             if (io.config.get('device') !== 'IPC') {
+
                 p = spawn('ffmpeg', [
                     '-v', 'error',
                     '-f', deviceInterface,
@@ -187,13 +190,29 @@ function startCapture() {
                     '-acodec', 'pcm_s16le', '-ar', '16000',
                     '-f', 'wav', '-'])
 
+
+
                 p.stderr.on('data', data => {
                     logger.error(data.toString())
                     process.exit(1)
                 })
                 s = p.stdout
+                var counter = 0
+                var writer = new wav.Writer();
+                writer.pipe(fs.createWriteStream('kasra.wav'));
+
+                s.on('data', data => {
+                  if(counter % 3 == 0) {
+                    audioBuffer = Buffer.from(data);
+                    writer.write(audioBuffer);
+                  }
+
+                  counter += 1
+                })
 
             } else {
+              console.log("2. heyy this got hit..")
+
                 const ipc = new RawIPC()
                 ipc.config.rawBuffer = true
                 ipc.config.appspace = 'beam-'
@@ -236,6 +255,7 @@ function startCapture() {
         }
     }
 
+
     transcribe()
 }
 
@@ -251,6 +271,7 @@ function stopCapture() {
 }
 
 function transcribe() {
+    console.log("transcribe was called now...")
     logger.info(`Starting all channels with the ${currentModel} model.`)
 
     for (let i = 0; i < channelTypes.length; i++) {
@@ -299,14 +320,19 @@ function transcribe() {
         })
 
 
-        var fileWriter = new wav.FileWriter('kasra.wav', {
-            channels: 1,
-            sampleRate: 44100,
-            bitDepth: 16
-        });
-
-        var audioBuffer = new AudioBuffer(1, 100000, 44100)
+        //console.log(sttStream)
         const textStream = channels[i].stream.pipe(sttStream)
+
+
+        // var fileWriter = new wav.FileWriter('kasra.wav', {
+        //     channels: 1,
+        //     sampleRate: 44100,
+        //     bitDepth: 16
+        // });
+        //
+        // var audioBuffer = new AudioBuffer(1, 100000, 44100)
+
+
 
 
         // const audioStream = channels[i].stream.pipe(fileWriter)
@@ -332,8 +358,8 @@ function transcribe() {
 
         textStream.setEncoding('utf8')
         textStream.on('results', input => {
-            console.log("we got a result..")
-            console.log(channels[0].process)
+            //console.log("we got a result..")
+            //console.log(channels[0].process)
             const result = input.results[0]
             if (result && publish) {
                 // See if we should clear speaker name

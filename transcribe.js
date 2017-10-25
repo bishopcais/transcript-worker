@@ -11,8 +11,13 @@ const wav = require('wav')
 const header = require('waveheader')
 // const tone   = require('tonegenerator');
 // const play = require('play')
-var AudioBuffer = require('audiobuffer')
-
+// var AudioBuffer = require('audiobuffer')
+var audioOptions = {
+  "sampleRate" : 16000
+};
+var writer = new wav.Writer({"sampleRate" : 16000, "channels" : 1});
+var AudioBuffer = new Buffer(256);
+var rawAudioData = []
 
 // var audioBuffer = require("n")
 // const CircularBuffer = require("circular-buffer");
@@ -175,7 +180,6 @@ class IPCInputStream extends stream.Readable {
 }
 
 function startCapture() {
-  console.log("hello starting capture..")
     for (let i = 0; i < channelTypes.length; i++) {
         let s, p
 
@@ -198,20 +202,20 @@ function startCapture() {
                 })
                 s = p.stdout
                 var counter = 0
-                var writer = new wav.Writer();
-                writer.pipe(fs.createWriteStream('kasra.wav'));
+                console.log(writer.sampleRate);
+                // writer.pipe(fs.createWriteStream('kasra.wav'));
 
                 s.on('data', data => {
-                  if(counter % 3 == 0) {
-                    audioBuffer = Buffer.from(data);
-                    writer.write(audioBuffer);
-                  }
+                    //audioBuffer = Buffer.from(data);
+                    //writer.write(audioBuffer);
 
-                  counter += 1
+                    for(var i = 0; i < data.length; i++) {
+                      rawAudioData.push(data[i])
+                    }
                 })
 
+
             } else {
-              console.log("2. heyy this got hit..")
 
                 const ipc = new RawIPC()
                 ipc.config.rawBuffer = true
@@ -270,8 +274,25 @@ function stopCapture() {
     }
 }
 
+function extractWord(extractedWord, start, end) {
+  console.log("extracting " + extractedWord);
+  startIndex = (16000 * start)
+  endIndex = (16000 * end)
+  extractedAudioData = []
+  writer.pipe(fs.createWriteStream('test_extraction.wav'));
+
+  for(i = startIndex; i < endIndex; i++){
+    extractedAudioData.push(rawAudioData[i]);
+  }
+
+  extractedAudioData = Buffer.from(extractedAudioData);
+  console.log("wrote " + extractedAudioData.length/8 + " bytes of audio..");
+  writer.write(extractedAudioData);
+  writer.end();
+
+}
+
 function transcribe() {
-    console.log("transcribe was called now...")
     logger.info(`Starting all channels with the ${currentModel} model.`)
 
     for (let i = 0; i < channelTypes.length; i++) {
@@ -323,43 +344,8 @@ function transcribe() {
         //console.log(sttStream)
         const textStream = channels[i].stream.pipe(sttStream)
 
-
-        // var fileWriter = new wav.FileWriter('kasra.wav', {
-        //     channels: 1,
-        //     sampleRate: 44100,
-        //     bitDepth: 16
-        // });
-        //
-        // var audioBuffer = new AudioBuffer(1, 100000, 44100)
-
-
-
-
-        // const audioStream = channels[i].stream.pipe(fileWriter)
-        //stream.pipe(fileWriter, { end: false });
-
-
-
-        //console.log(textStream)
-      //   var audioBuffer = new AudioBuffer(1, 100000, 44100)
-      //   var audioBuffer = AudioBuffer.fromArray([
-      //         [1, 0.5, 0.2, 1, 0.5],
-      //         [-1, -0.8, -0.7, -0.6, 0.3]], 22050)
-      //
-      // var writer = new wav.Writer();
-      //
-      // writer.pipe(fs.createWriteStream('test_.wav'));
-      //
-      // writer.write(new Buffer(tone(220, 5)));
-      // writer.end();
-
-
-
-
         textStream.setEncoding('utf8')
         textStream.on('results', input => {
-            //console.log("we got a result..")
-            //console.log(channels[0].process)
             const result = input.results[0]
             if (result && publish) {
                 // See if we should clear speaker name
@@ -381,13 +367,53 @@ function transcribe() {
                     speaker: channels[i].speaker,
                     total_time: total_time
                 }
-                var wordData = result["alternatives"][0]["timestamps"]
-                console.log("Result Var: " + result["alternatives"][0]["timestamps"])
+                // console.log(result["alternatives"])
+                // var wordData = result["alternatives"][0]["timestamps"]
+                // console.log("Result Var: " + result["alternatives"][0]["timestamps"])
+                // if()
                 // play.sound('test.wav')
 
-
+                // for wordData in result["alternatives"][0]["timestamps"] {
+                //   console.log("Here is our word data " + wordData);
+                // }
 
                 if (result.final) {
+                    var desiredWord = "test";
+                    for(var k = 0; k < result["alternatives"].length; k++){
+                      var resultData = result["alternatives"][k]
+                      var transcript = resultData["transcript"];
+                      if(transcript.indexOf(desiredWord) != -1){
+                        if("timestamps" in resultData){
+                          for(var j = 0; j < resultData["timestamps"].length; j++){
+                            if(resultData["timestamps"][j][0] == desiredWord){
+                              extractWord(desiredWord,resultData["timestamps"][j][1], resultData["timestamps"][j][2])
+                            }
+                          }
+                        }
+                      }
+
+
+
+                    }
+
+                    // for(var k = 0; i < result["alternatives"].length; k++){
+                    //   var transcript = result["alternatives"][k]["transcript"];
+                    //   console.log(tras)
+                    //   // if(transcript.indexOf(desiredWord) != -1){
+                    //   //   console.log("found " + desiredWord + " in transcript..");
+                    //   //   // if("timestamps" in result["alternatives"][i]){
+                    //   //   //   for(var j = 0; j < result["alternatives"][i]["timestamps"].length; j++){
+                    //   //   //     if(result["alternatives"][i]["timestamps"][j][0] == desiredWord){
+                    //   //   //       console.log("WE FOUND " + desiredWord);
+                    //   //   //       console.log(result["alternatives"][i]["timestamps"][j]);
+                    //   //   //
+                    //   //   //     }
+                    //   //   //   }
+                    //   //   // }
+                    //   // }
+                    // }
+
+
                     logger.info(JSON.stringify(msg))
                     io.publishTopic('command.firstplayable.client',JSON.stringify({
                       'type':'chat_log_append',
@@ -446,9 +472,11 @@ startCapture()
 process.stdin.resume()// so the program will not close instantly
 
 function exitHandler(options, err) {
+
     if (options.cleanup) stopCapture()
     if (err) console.log(err.stack)
     if (options.exit) process.exit()
+    writer.end();
 }
 
 // do something when app is closing

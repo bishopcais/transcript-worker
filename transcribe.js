@@ -276,8 +276,13 @@ function stopCapture() {
 
 function extractWord(extractedWord, start, end) {
   console.log("extracting " + extractedWord);
+
   startIndex = (16000 * start)
   endIndex = (16000 * end)
+  console.log("startIndex: " + startIndex);
+  console.log("endIndex" + endIndex);
+
+
   extractedAudioData = []
   writer.pipe(fs.createWriteStream('test_extraction.wav'));
 
@@ -326,6 +331,14 @@ function transcribe() {
             params.keywords_threshold = currentKeywordsThreshold
         }
         const sttStream = speech_to_text.createRecognizeStream(params)
+
+
+        sttStream.on('connect', (data) => {
+          console.log('established connection to STT server.. reseting audio buffer..');
+          // rawAudioData = []
+
+        })
+
 
         sttStream.on('error', (err) => {
             if (!restarting) {

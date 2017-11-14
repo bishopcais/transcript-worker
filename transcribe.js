@@ -9,19 +9,15 @@ const fs = require('fs')
 const RawIPC = require('node-ipc').IPC
 const wav = require('wav')
 const header = require('waveheader')
-// const tone   = require('tonegenerator');
-// const play = require('play')
-// var AudioBuffer = require('audiobuffer')
-var audioOptions = {
-  "sampleRate" : 16000
-};
+
+var audioOptions = {"sampleRate" : 16000};
 var writer = new wav.Writer({"sampleRate" : 16000, "channels" : 1});
 var AudioBuffer = new Buffer(256);
+var cbarrickCircularBuffer = require("cbarrick-circular-buffer")
+var rawAudioBuffer = new cbarrickCircularBuffer({"size" : 114000, "encoding" : "buffer"});
+console.log(rawAudioBuffer.size)
+
 var rawAudioData = []
-
-// var audioBuffer = require("n")
-// const CircularBuffer = require("circular-buffer");
-
 
 if (!fs.existsSync('logs')) {
     fs.mkdirSync('logs')
@@ -201,17 +197,8 @@ function startCapture() {
                     process.exit(1)
                 })
                 s = p.stdout
-                var counter = 0
-                console.log(writer.sampleRate);
-                // writer.pipe(fs.createWriteStream('kasra.wav'));
-
                 s.on('data', data => {
-                    //audioBuffer = Buffer.from(data);
-                    //writer.write(audioBuffer);
-
-                    for(var i = 0; i < data.length; i++) {
-                      rawAudioData.push(data[i])
-                    }
+                  rawAudioBuffer.write(data);
                 })
 
 
@@ -277,20 +264,23 @@ function stopCapture() {
 function extractWord(extractedWord, start, end) {
   console.log("extracting " + extractedWord);
 
-  startIndex = (16000 * start)
-  endIndex = (16000 * end)
+  console.log("this is our raw audio buffer: ");
+  console.log(rawAudioBuffer.toString());
+  startIndex = ((16000) * 2 * start)
+  endIndex = ((16000) * 2 * end)
   console.log("startIndex: " + startIndex);
   console.log("endIndex" + endIndex);
-
+  console.log("buffer size: " + rawAudioBuffer.size);
+  console.log("buffer length: " + rawAudioBuffer.length);
 
   extractedAudioData = []
   writer.pipe(fs.createWriteStream('test_extraction.wav'));
 
-  for(i = startIndex; i < endIndex; i++){
-    extractedAudioData.push(rawAudioData[i]);
-  }
+  //after data has been extracted publish to rabbitmq..
 
-  extractedAudioData = Buffer.from(extractedAudioData);
+
+
+  extractedAudioData = rawAudioBuffer.slice(startIndex, endIndex);
   console.log("wrote " + extractedAudioData.length/8 + " bytes of audio..");
   writer.write(extractedAudioData);
   writer.end();
@@ -335,7 +325,7 @@ function transcribe() {
 
         sttStream.on('connect', (data) => {
           console.log('established connection to STT server.. reseting audio buffer..');
-          // rawAudioData = []
+          //rawAudioData = []
 
         })
 
@@ -380,15 +370,7 @@ function transcribe() {
                     speaker: channels[i].speaker,
                     total_time: total_time
                 }
-                // console.log(result["alternatives"])
-                // var wordData = result["alternatives"][0]["timestamps"]
-                // console.log("Result Var: " + result["alternatives"][0]["timestamps"])
-                // if()
-                // play.sound('test.wav')
 
-                // for wordData in result["alternatives"][0]["timestamps"] {
-                //   console.log("Here is our word data " + wordData);
-                // }
 
                 if (result.final) {
                     var desiredWord = "test";
@@ -408,24 +390,6 @@ function transcribe() {
 
 
                     }
-
-                    // for(var k = 0; i < result["alternatives"].length; k++){
-                    //   var transcript = result["alternatives"][k]["transcript"];
-                    //   console.log(tras)
-                    //   // if(transcript.indexOf(desiredWord) != -1){
-                    //   //   console.log("found " + desiredWord + " in transcript..");
-                    //   //   // if("timestamps" in result["alternatives"][i]){
-                    //   //   //   for(var j = 0; j < result["alternatives"][i]["timestamps"].length; j++){
-                    //   //   //     if(result["alternatives"][i]["timestamps"][j][0] == desiredWord){
-                    //   //   //       console.log("WE FOUND " + desiredWord);
-                    //   //   //       console.log(result["alternatives"][i]["timestamps"][j]);
-                    //   //   //
-                    //   //   //     }
-                    //   //   //   }
-                    //   //   // }
-                    //   // }
-                    // }
-
 
                     logger.info(JSON.stringify(msg))
                     io.publishTopic('command.firstplayable.client',JSON.stringify({

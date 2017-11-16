@@ -12,11 +12,9 @@ const header = require('waveheader')
 
 var audioOptions = {"sampleRate" : 16000};
 var writer = new wav.Writer({"sampleRate" : 16000, "channels" : 1});
-//var rawAudioBuffer = new cbarrickCircularBuffer({"size" : 114000, "encoding" : "buffer"});
 var CircularBuffer = require('./index.js');
 var rawAudioBuffer = new CircularBuffer(112000);
 
-//var rawAudioData = []
 if (!fs.existsSync('logs')) {
     fs.mkdirSync('logs')
 }
@@ -262,25 +260,16 @@ function stopCapture() {
 function extractWord(extractedWord, start, end) {
   console.log("extracting " + extractedWord);
 
-  console.log("this is our raw audio buffer: ");
   startIndex = ((16000) * 2 * start)
   endIndex = ((16000) * 2 * end)
-  //console.log("startIndex: " + startIndex);
-  //console.log("endIndex" + endIndex);
-  //console.log("buffer size: " + rawAudioBuffer.size);
-  //console.log("buffer length: " + rawAudioBuffer.length);
 
   extractedAudioData = []
   writer.pipe(fs.createWriteStream('test_extraction.wav'));
 
   //after data has been extracted publish to rabbitmq..
 
-
-
   extractedAudioData = rawAudioBuffer.slice(startIndex, endIndex);
   console.log("wrote " + extractedAudioData.length/8 + " bytes of audio..");
-  console.log("Our Audio Buffer is size: " + rawAudioBuffer.getSize());
-  console.log("Our Audio Buffer length: " + rawAudioBuffer.getLength());
 
   writer.write(extractedAudioData);
   writer.end();
@@ -324,9 +313,7 @@ function transcribe() {
 
 
         sttStream.on('connect', (data) => {
-          console.log('established connection to STT server.. reseting audio buffer..');
-          //rawAudioData = []
-
+          //Reset audio buffer for better results?
         })
 
 
@@ -344,7 +331,6 @@ function transcribe() {
         })
 
 
-        //console.log(sttStream)
         const textStream = channels[i].stream.pipe(sttStream)
 
         textStream.setEncoding('utf8')
@@ -373,6 +359,7 @@ function transcribe() {
 
 
                 if (result.final) {
+                    //find desired keywords in transcript..
                     var desiredWord = "test";
                     for(var k = 0; k < result["alternatives"].length; k++){
                       var resultData = result["alternatives"][k]

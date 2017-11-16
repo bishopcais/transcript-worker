@@ -12,13 +12,11 @@ const header = require('waveheader')
 
 var audioOptions = {"sampleRate" : 16000};
 var writer = new wav.Writer({"sampleRate" : 16000, "channels" : 1});
-var AudioBuffer = new Buffer(256);
-var cbarrickCircularBuffer = require("cbarrick-circular-buffer")
-var rawAudioBuffer = new cbarrickCircularBuffer({"size" : 114000, "encoding" : "buffer"});
-console.log(rawAudioBuffer.size)
+//var rawAudioBuffer = new cbarrickCircularBuffer({"size" : 114000, "encoding" : "buffer"});
+var CircularBuffer = require('./index.js');
+var rawAudioBuffer = new CircularBuffer(112000);
 
-var rawAudioData = []
-
+//var rawAudioData = []
 if (!fs.existsSync('logs')) {
     fs.mkdirSync('logs')
 }
@@ -265,13 +263,12 @@ function extractWord(extractedWord, start, end) {
   console.log("extracting " + extractedWord);
 
   console.log("this is our raw audio buffer: ");
-  console.log(rawAudioBuffer.toString());
   startIndex = ((16000) * 2 * start)
   endIndex = ((16000) * 2 * end)
-  console.log("startIndex: " + startIndex);
-  console.log("endIndex" + endIndex);
-  console.log("buffer size: " + rawAudioBuffer.size);
-  console.log("buffer length: " + rawAudioBuffer.length);
+  //console.log("startIndex: " + startIndex);
+  //console.log("endIndex" + endIndex);
+  //console.log("buffer size: " + rawAudioBuffer.size);
+  //console.log("buffer length: " + rawAudioBuffer.length);
 
   extractedAudioData = []
   writer.pipe(fs.createWriteStream('test_extraction.wav'));
@@ -282,6 +279,9 @@ function extractWord(extractedWord, start, end) {
 
   extractedAudioData = rawAudioBuffer.slice(startIndex, endIndex);
   console.log("wrote " + extractedAudioData.length/8 + " bytes of audio..");
+  console.log("Our Audio Buffer is size: " + rawAudioBuffer.getSize());
+  console.log("Our Audio Buffer length: " + rawAudioBuffer.getLength());
+
   writer.write(extractedAudioData);
   writer.end();
 

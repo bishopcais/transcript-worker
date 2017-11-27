@@ -86,11 +86,10 @@ switch (process.platform) {
         device = `${io.config.get('device')}`
         break
 }
-
 io.onTopic('CIR.pitchtone.request', msg => {
       msg = JSON.parse(msg);
       desiredKeyWord = msg.word;
-});
+})
 
 io.onTopic('switchLanguage.transcript.command', msg =>{
   stopCapture();
@@ -182,7 +181,6 @@ function startCapture() {
 
         if (channelTypes[i] !== 'none') {
             if (io.config.get('device') !== 'IPC') {
-
                 p = spawn('ffmpeg', [
                     '-v', 'error',
                     '-f', deviceInterface,
@@ -191,20 +189,17 @@ function startCapture() {
                     '-acodec', 'pcm_s16le', '-ar', '16000',
                     '-f', 'wav', '-'])
 
-
-
                 p.stderr.on('data', data => {
                     logger.error(data.toString())
                     process.exit(1)
                 })
+
                 s = p.stdout
                 s.on('data', data => {
                   rawAudioBuffer.write(data);
                 })
 
-
             } else {
-
                 const ipc = new RawIPC()
                 ipc.config.rawBuffer = true
                 ipc.config.appspace = 'beam-'
@@ -246,7 +241,6 @@ function startCapture() {
             channels.push({ process: p, stream: s })
         }
     }
-
 
     transcribe()
 }
@@ -326,11 +320,11 @@ function transcribe() {
             }
         })
 
-
         const textStream = channels[i].stream.pipe(sttStream)
 
         textStream.setEncoding('utf8')
         textStream.on('results', input => {
+
             const result = input.results[0]
             if (result && publish) {
                 // See if we should clear speaker name
@@ -353,7 +347,6 @@ function transcribe() {
                     total_time: total_time
                 }
 
-
                 if (result.final) {
                     //find desired keywords in transcript..
                     for(var k = 0; k < result["alternatives"].length; k++){
@@ -371,12 +364,10 @@ function transcribe() {
                           }
                         }
                       }
-
                       if(wordFound == true){
                         break;
                       }
                     }
-
                     logger.info(JSON.stringify(msg))
                     io.publishTopic('command.firstplayable.client',JSON.stringify({
                       'type':'chat_log_append',
@@ -435,7 +426,6 @@ startCapture()
 process.stdin.resume()// so the program will not close instantly
 
 function exitHandler(options, err) {
-
     if (options.cleanup) stopCapture()
     if (err) console.log(err.stack)
     if (options.exit) process.exit()

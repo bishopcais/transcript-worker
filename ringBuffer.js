@@ -15,7 +15,7 @@ module.exports = function CISL_CircularBuffer(size){
 	this.getBuffer = function() {
 		return this.buffer;
 	}
-
+	
   this.getSize = function() {
     return this.size;
   }
@@ -60,7 +60,4 @@ module.exports = function CISL_CircularBuffer(size){
 
 		return this.buffer.slice(start, end);
 	};
-
-
-
 };

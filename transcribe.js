@@ -8,10 +8,7 @@ const stream = require('stream')
 const fs = require('fs')
 const RawIPC = require('node-ipc').IPC
 const wav = require('wav')
-
-var CircularBuffer = require('./ringBuffer.js');
-var rawAudioBuffer = new CircularBuffer(112000);
-var desiredKeyWord = "test";
+const sampleRate = 16000;
 
 if (!fs.existsSync('logs')) {
     fs.mkdirSync('logs')
@@ -65,6 +62,10 @@ io.store.onChange('transcript:keywords', () => {
 
 let currentKeywordsThreshold = 0.01
 
+const CircularBuffer = require('./ringBuffer.js');
+var rawAudioBuffer = new CircularBuffer(io.config.get('circular_buffer_size'));
+var desiredKeyWord = "";
+
 const speech_to_text = new SpeechToTextV1(io.config.get('STT'))
 
 let deviceInterface
@@ -89,8 +90,6 @@ switch (process.platform) {
 io.onTopic('CIR.pitchtone.request', msg => {
       msg = JSON.parse(msg);
       desiredKeyWord = msg.word;
-
-
 });
 
 io.onTopic('switchLanguage.transcript.command', msg =>{
@@ -262,23 +261,19 @@ function stopCapture() {
         channels[i].stream = null
     }
 }
-//if a pre defined keyword has been found in the transcript, extract the audio for the word and send it over RabbitMQ 
+//if a pre defined keyword has been found in the transcript, extract the audio for the word and send it over RabbitMQ
 function extractWord(extractedWord, start, end) {
-  console.log("extracting " + extractedWord);
-
-  startIndex = ((16000) * 2 * start)
-  endIndex = ((16000) * 2 * end)
+  startIndex = (sampleRate * 2 * start)
+  endIndex = (sampleRate * 2 * end)
 
   //extract audio bytes with given start and end indexes
   var extractedAudioData = rawAudioBuffer.slice(startIndex, endIndex);
-
-  var audioOptions = {"sampleRate" : 16000};
-  var writer = new wav.Writer({"sampleRate" : 16000, "channels" : 1});
+  var writer = new wav.Writer({"sampleRate" : sampleRate, "channels" : 1});
   writer.write(extractedAudioData, ()=>{
-    console.log("extracted " + extractedAudioData.length/8 + " bytes of audio..");
     var extractedAudioFile = writer.read();
 
     //after data has been extracted publish to rabbitmq..
+    console.log("extracted " + extractedWord + " for analysis");
     io.publishTopic("CIR.pitchtone.audio", extractedAudioFile);
   });
 }
@@ -362,20 +357,24 @@ function transcribe() {
                 if (result.final) {
                     //find desired keywords in transcript..
                     for(var k = 0; k < result["alternatives"].length; k++){
-                      var resultData = result["alternatives"][k]
-                      var transcript = resultData["transcript"];
+                      let resultData = result["alternatives"][k];
+                      let transcript = resultData["transcript"];
+                      var wordFound = false;
                       if(transcript.indexOf(desiredKeyWord) != -1){
                         if("timestamps" in resultData){
                           for(var j = 0; j < resultData["timestamps"].length; j++){
                             if(resultData["timestamps"][j][0] == desiredKeyWord){
-                              extractWord(desiredKeyWord,resultData["timestamps"][j][1], resultData["timestamps"][j][2])
+                              extractWord(desiredKeyWord,resultData["timestamps"][j][1], resultData["timestamps"][j][2]);
+                              wordFound = true;
+                              break;
                             }
                           }
                         }
                       }
 
-
-
+                      if(wordFound == true){
+                        break;
+                      }
                     }
 
                     logger.info(JSON.stringify(msg))

@@ -36,8 +36,6 @@ module.exports = function CISL_CircularBuffer(size){
 		if(audioChunk.length + this.tail > this.size){
 			var endChunkLength = (this.size - this.tail);
 			var beginningChunkLength = (audioChunk.length - endChunkLength);
-			// var endAudioChunk = audioChunk.slice(0, endChunkLength);
-			// var beginningAudioChunk = audioChunk.slice(endChunkLength, audioChunk.length);
 
 			//get chunk to write to the beginning and end of the buffer
 			audioChunk.slice(0, endChunkLength).copy(this.buffer, this.tail);
@@ -54,7 +52,6 @@ module.exports = function CISL_CircularBuffer(size){
 			this.tail += audioChunk.length;
 		}
 	};
-
 
 	//slice the buffer given a start and an end
 	this.slice = function(start, end){

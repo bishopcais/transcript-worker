@@ -7,6 +7,8 @@ const SpeechToTextV1 = require('watson-developer-cloud/speech-to-text/v1')
 const stream = require('stream')
 const fs = require('fs')
 const RawIPC = require('node-ipc').IPC
+const wav = require('wav')
+const sampleRate = 16000;
 
 if (!fs.existsSync('logs')) {
     fs.mkdirSync('logs')
@@ -60,6 +62,10 @@ io.store.onChange('transcript:keywords', () => {
 
 let currentKeywordsThreshold = 0.01
 
+const CircularBuffer = require('./ringBuffer.js');
+var rawAudioBuffer = new CircularBuffer(io.config.get('circular_buffer_size'));
+var desiredKeyWord = "";
+
 const speech_to_text = new SpeechToTextV1(io.config.get('STT'))
 
 let deviceInterface
@@ -80,6 +86,11 @@ switch (process.platform) {
         device = `${io.config.get('device')}`
         break
 }
+io.onTopic('CIR.pitchtone.request', msg => {
+      msg = JSON.parse(msg);
+      desiredKeyWord = msg.word;
+})
+
 io.onTopic('switchLanguage.transcript.command', msg =>{
   stopCapture();
   msg = JSON.parse(msg);
@@ -184,6 +195,10 @@ function startCapture() {
                 })
 
                 s = p.stdout
+                s.on('data', data => {
+                  rawAudioBuffer.write(data);
+                })
+
             } else {
                 const ipc = new RawIPC()
                 ipc.config.rawBuffer = true
@@ -239,6 +254,22 @@ function stopCapture() {
         }
         channels[i].stream = null
     }
+}
+//if a pre defined keyword has been found in the transcript, extract the audio for the word and send it over RabbitMQ
+function extractWord(extractedWord, start, end) {
+  startIndex = (sampleRate * 2 * start)
+  endIndex = (sampleRate * 2 * end)
+
+  //extract audio bytes with given start and end indexes
+  var extractedAudioData = rawAudioBuffer.slice(startIndex, endIndex);
+  var writer = new wav.Writer({"sampleRate" : sampleRate, "channels" : 1});
+  writer.write(extractedAudioData, ()=>{
+    var extractedAudioFile = writer.read();
+
+    //after data has been extracted publish to rabbitmq..
+    console.log("extracted " + extractedWord + " for analysis");
+    io.publishTopic("CIR.pitchtone.audio", extractedAudioFile);
+  });
 }
 
 function transcribe() {
@@ -315,7 +346,28 @@ function transcribe() {
                     speaker: channels[i].speaker,
                     total_time: total_time
                 }
+
                 if (result.final) {
+                    //find desired keywords in transcript..
+                    for(var k = 0; k < result["alternatives"].length; k++){
+                      let resultData = result["alternatives"][k];
+                      let transcript = resultData["transcript"];
+                      var wordFound = false;
+                      if(transcript.indexOf(desiredKeyWord) != -1){
+                        if("timestamps" in resultData){
+                          for(var j = 0; j < resultData["timestamps"].length; j++){
+                            if(resultData["timestamps"][j][0] == desiredKeyWord){
+                              extractWord(desiredKeyWord,resultData["timestamps"][j][1], resultData["timestamps"][j][2]);
+                              wordFound = true;
+                              break;
+                            }
+                          }
+                        }
+                      }
+                      if(wordFound == true){
+                        break;
+                      }
+                    }
                     logger.info(JSON.stringify(msg))
                     io.publishTopic('command.firstplayable.client',JSON.stringify({
                       'type':'chat_log_append',

@@ -39,11 +39,21 @@ io.config.defaults({
     'models': {},
     'channels': ['far'],
     'default_model': 'generic',
-    'id': io.generateUUID()
+    'id': io.generateUUID(),
+    'record': {
+      'enabled': false
+    }
 })
 
 var channelTypes = io.config.get('channels')
 logger.info(`Transcribing ${channelTypes.length} channels.`)
+
+var recordingEnabled = io.config.get('record:enabled');
+var recordingFile;
+var recordingObj = [];
+if (recordingEnabled) {
+  recordingFile = io.config.get('record:file');
+}
 
 const channels = []
 const models = io.config.get('models')
@@ -64,7 +74,7 @@ let currentKeywordsThreshold = 0.01
 
 const CircularBuffer = require('./ringBuffer.js');
 var rawAudioBuffer = new CircularBuffer(io.config.get('circular_buffer_size'));
-var desiredKeyWord = "";
+var desiredKeyWord = "test";
 
 const speech_to_text = new SpeechToTextV1(io.config.get('STT'))
 
@@ -87,9 +97,22 @@ switch (process.platform) {
         break
 }
 io.onTopic('CIR.pitchtone.request', msg => {
-      msg = JSON.parse(msg);
-      desiredKeyWord = msg.word;
+    msg = JSON.parse(msg);
+    desiredKeyWord = msg.word;
 })
+
+io.onTopic('CIR.recording.command', msg => {
+    msg = JSON.parse(msg);
+    if (msg.enabled) {
+      recordingObj = [];
+      recordingFile = msg.file;
+      recordingEnabled = true;
+    }
+    else {
+      recordingObj = [];
+      recordingEnabled = false;
+    }
+});
 
 io.onTopic('switchLanguage.transcript.command', msg =>{
   stopCapture();
@@ -376,9 +399,16 @@ function transcribe() {
                       }
                     }))
                     channels[i].lastMessageTimeStamp = new Date()
-                }
-                io.transcript.publish(channelTypes[i], result.final, msg)
 
+                    if (recordingEnabled) {
+                        recordingObj.push(msg);
+                        fs.writeFileSync(recordingFile, JSON.stringify({
+                          "transcripts": recordingObj
+                        }));
+                    }
+                }
+
+                io.transcript.publish(channelTypes[i], result.final, msg)
             }
 
             if (!publish) {

@@ -24,6 +24,10 @@
   "store": {
     "url": "128.113.21.131:6379"
   },
+  "record": {
+    "enabled": true,
+    "file": "recording.json"
+  },
   "channels": ["en-US", "en-US", "en-US", "zh-CN", "zh-CN", "zh-CN"],
   "keywords": ["watson", "celia"],
   "device": "default",

@@ -74,7 +74,7 @@ let currentKeywordsThreshold = 0.01
 
 const CircularBuffer = require('./ringBuffer.js');
 var rawAudioBuffer = new CircularBuffer(io.config.get('circular_buffer_size'));
-var desiredKeyWord = "test";
+var phraseToExtract = "";
 
 const speech_to_text = new SpeechToTextV1(io.config.get('STT'))
 
@@ -98,7 +98,7 @@ switch (process.platform) {
 }
 io.onTopic('CIR.pitchtone.request', msg => {
     msg = JSON.parse(msg);
-    desiredKeyWord = msg.word;
+    phraseToExtract = msg.word;
 })
 
 io.onTopic('CIR.recording.command', msg => {
@@ -279,7 +279,7 @@ function stopCapture() {
     }
 }
 //if a pre defined keyword has been found in the transcript, extract the audio for the word and send it over RabbitMQ
-function extractWord(extractedWord, start, end) {
+function extractPhrase(extractedWord, start, end) {
   startIndex = (sampleRate * 2 * start)
   endIndex = (sampleRate * 2 * end)
 
@@ -372,32 +372,55 @@ function transcribe() {
 
                 if (result.final) {
                     //find desired keywords in transcript..
-                    for(var k = 0; k < result["alternatives"].length; k++){
-                      let resultData = result["alternatives"][k];
-                      let transcript = resultData["transcript"];
-                      var wordFound = false;
-                      if(transcript.indexOf(desiredKeyWord) != -1){
-                        if("timestamps" in resultData){
-                          for(var j = 0; j < resultData["timestamps"].length; j++){
-                            if(resultData["timestamps"][j][0] == desiredKeyWord){
-                              extractWord(desiredKeyWord,resultData["timestamps"][j][1], resultData["timestamps"][j][2]);
-                              wordFound = true;
-                              break;
-                            }
+                    for(var k = 0; k < result.alternatives.length; k++){
+                      let resultData = result.alternatives[k];
+                      let transcript = resultData.transcript;
+                      let timestamps = resultData.timestamps;
+
+                      let phraseIndex = transcript.indexOf(phraseToExtract);
+                      if (!timestamps || phraseIndex == -1) {
+                        continue;
+                      }
+
+                      //TODO this logic probably doesn't handle a lot of edge cases. Do more thorough testing
+                      let matchBuffer = phraseToExtract;
+                      let startTime = 0, endTime = 0;
+                      for(var j = 0; j < timestamps.length; j++){
+                        let charIndex = matchBuffer.indexOf(timestamps[j][0]);
+
+                        //Break when we stop finding matches after we've found the first match
+                        if (charIndex == -1 && startTime != 0) {
+                          break;
+                        }
+                        else if (charIndex != -1) {
+                          //Strip the match out to prevent extra long matches.
+                          //e.g. searching for "banana bread" in transcript "banana bread bread banana"
+                          matchBuffer = matchBuffer.substring(charIndex + timestamps[j][0].length).trim()
+
+                          //First match sets both start and end times, further matches only update the end time
+                          if (startTime == 0) {
+                            startTime = timestamps[j][1];
                           }
+
+                          endTime = timestamps[j][2];
                         }
                       }
-                      if(wordFound == true){
-                        break;
+
+                      if (startTime != 0 && endTime > startTime) {
+                        extractPhrase(phraseToExtract, startTime, endTime);
                       }
                     }
+
                     logger.info(JSON.stringify(msg))
+
+                    //TODO get Unity to directly read from transcript queue instead
                     io.publishTopic('command.firstplayable.client',JSON.stringify({
                       'type':'chat_log_append',
                       'details':{
                         'text':msg.result.alternatives[0].transcript
                       }
                     }))
+
                     channels[i].lastMessageTimeStamp = new Date()
 
                     if (recordingEnabled) {

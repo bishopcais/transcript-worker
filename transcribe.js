@@ -10,6 +10,7 @@ const RawIPC = require('node-ipc').IPC
 const wav = require('wav')
 const sampleRate = 16000;
 
+
 if (!fs.existsSync('logs')) {
     fs.mkdirSync('logs')
 }
@@ -75,6 +76,8 @@ let currentKeywordsThreshold = 0.01
 const CircularBuffer = require('./ringBuffer.js');
 var rawAudioBuffer = new CircularBuffer(io.config.get('circular_buffer_size'));
 var phraseToExtract = "";
+var XiongMaoTag= false;
+var new_transcript = "";
 
 const speech_to_text = new SpeechToTextV1(io.config.get('STT'))
 
@@ -96,6 +99,12 @@ switch (process.platform) {
         device = `${io.config.get('device')}`
         break
 }
+io.onTopic('CIR.pitchtone.executor', msg=> {
+  msg = JSON.parse(msg);
+  if (msg.type === "start_listen"){
+    XiongMaoTag = true;
+  }
+});
 io.onTopic('CIR.pitchtone.request', msg => {
     msg = JSON.parse(msg);
     phraseToExtract = msg.word;
@@ -295,6 +304,11 @@ function extractPhrase(extractedWord, start, end) {
   });
 }
 
+
+
+
+
+
 function transcribe() {
     logger.info(`Starting all channels with the ${currentModel} model.`)
 
@@ -371,45 +385,127 @@ function transcribe() {
                 }
 
                 if (result.final) {
-                    //find desired keywords in transcript..
-                    for(var k = 0; k < result.alternatives.length; k++){
-                      let resultData = result.alternatives[k];
-                      let transcript = resultData.transcript;
-                      let timestamps = resultData.timestamps;
+                  //find desired keywords in transcript..
+                  for(var k = 0; k < result.alternatives.length; k++){
+                    console.log("====================");
+                     console.log(result.alternatives[k]);
+                    let resultData = result.alternatives[k];
+                    let transcript = resultData.transcript;
+                    let timestamps = resultData.timestamps;
 
-                      let phraseIndex = transcript.indexOf(phraseToExtract);
-                      if (!timestamps || phraseIndex == -1) {
-                        continue;
+
+
+                    var firstword = "";
+                    var currentwordlength=0;
+                    //check if the word "xiongmao" exists in the transcript
+                    for(var m=0;m<transcript.length;m++){
+                    if(currentwordlength==2){
+                      break;
+                     }
+                     if(transcript[m]!=" "){
+                       firstword = firstword.concat(transcript[m]);
+                      currentwordlength++;
+                     }
+                    }
+                    console.log("the first word is");
+                    console.log(firstword);
+
+
+
+
+                   let phraseIndex = transcript.indexOf(phraseToExtract);
+                   if (!timestamps || phraseIndex == -1) {
+                     continue;
+                   }
+
+                    //TODO this logic probably doesn't handle a lot of edge cases. Do more thorough testing
+                    let matchBuffer = transcript;
+                    let startTime = 0, endTime = 0;
+                    for(let j = 0; j < timestamps.length; j++){
+                      let charIndex = matchBuffer.indexOf(timestamps[j][0]);
+
+                      //Break when we stop finding matches after we've found the first match
+                     if (charIndex == -1 && startTime != 0) {
+                        break;
                       }
+                      else if (charIndex != -1) {
+                        //Strip the match out to prevent extra long matches.
+                        //e.g. searching for "banana bread" in transcript "banana bread bread banana"
+                        matchBuffer = matchBuffer.substring(charIndex + timestamps[j][0].length).trim();
 
-                      //TODO this logic probably doesn't handle a lot of edge cases. Do more thorough testing
-                      let matchBuffer = phraseToExtract;
-                      let startTime = 0, endTime = 0;
-                      for(var j = 0; j < timestamps.length; j++){
-                        let charIndex = matchBuffer.indexOf(timestamps[j][0]);
-
-                        //Break when we stop finding matches after we've found the first match
-                        if (charIndex == -1 && startTime != 0) {
-                          break;
+                        //First match sets both start and end times, further matches only update the end time
+                        if (startTime == 0) {
+                          startTime = timestamps[j][1];
                         }
-                        else if (charIndex != -1) {
-                          //Strip the match out to prevent extra long matches.
-                          //e.g. searching for "banana bread" in transcript "banana bread bread banana"
-                          matchBuffer = matchBuffer.substring(charIndex + timestamps[j][0].length).trim()
 
-                          //First match sets both start and end times, further matches only update the end time
-                          if (startTime == 0) {
-                            startTime = timestamps[j][1];
-                          }
-
-                          endTime = timestamps[j][2];
-                        }
-                      }
-
-                      if (startTime != 0 && endTime > startTime) {
-                        extractPhrase(phraseToExtract, startTime, endTime);
+                        endTime = timestamps[j][2];
                       }
                     }
+
+                    if (startTime != 0 && endTime > startTime) {
+                      //extractPhrase(phraseToExtract, startTime, endTime);
+
+                      //send next (speech+txt) starting with XiongMao (currently it sends whatever word it has)
+                      console.log(transcript);
+                      console.log(phraseToExtract);
+                    var compare_string = firstword.localeCompare("熊猫");
+                    //extractPhrase(transcript, startTime, endTime);
+                    //each time run the program, check for XiongMao to start
+                    if(XiongMaoTag == false){
+                      if(compare_string == 0){
+                       console.log("is XiongMao");
+                       for( var s=0; s< timestamps.length;s++){
+                         if(timestamps[s][0]=="熊猫"){
+                           startTime = timestamps[s][2];
+                         }
+                       }
+
+
+                       transcript=transcript.replace("熊猫","");
+                       new_transcript = transcript;
+                      console.log("new_transcript")
+                      console.log(new_transcript)
+
+
+
+
+                    /*
+                       for (var w in resultData){
+                         if(w=="transcript"){
+                           resultData.transcript = new_transcript;
+                         }
+                         is (w=="timestamp"){
+                           for(var t in resultData.timestamps){
+                             if(t[0]=="熊猫"){
+                               delete resultData.timestamps[t];
+                             }
+                           }
+                         }
+
+                       }
+                    */
+                       extractPhrase(transcript, startTime, endTime);
+                      //transcript= transcript.replace("熊猫","");
+                      // new_transcript= transcript;
+                       XiongMaoTag = true;
+
+
+
+                       continue;
+                     }
+
+                   }else{
+                       console.log("new_transcript")
+                     new_transcript =transcript;
+
+                     extractPhrase(transcript, startTime, endTime);
+                   }
+
+
+                    }
+
+                  }
+
 
                     logger.info(JSON.stringify(msg))
 
@@ -418,8 +514,16 @@ function transcribe() {
                       'type':'chat_log_append',
                       'details':{
                         'text':msg.result.alternatives[0].transcript
+                      //'text':msg.transcript
                       }
                     }))
+
+                    io.publishTopic('CIR.pitchtone.transcript',JSON.stringify({
+                       'result':{'alternatives':[{'transcript':new_transcript}]}
+                    }
+
+                  ))
+
 
                     channels[i].lastMessageTimeStamp = new Date()
 

@@ -103,6 +103,7 @@ io.onTopic('CIR.pitchtone.executor', msg=> {
   msg = JSON.parse(msg);
   if (msg.type === "start_listen"){
     XiongMaoTag = true;
+    console.log("****" + "message receved");
   }
 });
 io.onTopic('CIR.pitchtone.request', msg => {
@@ -300,7 +301,9 @@ function extractPhrase(extractedWord, start, end) {
 
     //after data has been extracted publish to rabbitmq..
     console.log("extracted " + extractedWord + " for analysis");
-    io.publishTopic("CIR.pitchtone.audio", extractedAudioFile);
+    if( XiongMaoTag == true){
+      io.publishTopic("CIR.pitchtone.audio", extractedAudioFile);
+    }
   });
 }
 
@@ -451,7 +454,7 @@ function transcribe() {
                     var compare_string = firstword.localeCompare("熊猫");
                     //extractPhrase(transcript, startTime, endTime);
                     //each time run the program, check for XiongMao to start
-                    if(XiongMaoTag == false){
+                    if(XiongMaoTag == true){
                       if(compare_string == 0){
                        console.log("is XiongMao");
                        for( var s=0; s< timestamps.length;s++){
@@ -487,9 +490,14 @@ function transcribe() {
                        extractPhrase(transcript, startTime, endTime);
                       //transcript= transcript.replace("熊猫","");
                       // new_transcript= transcript;
-                       XiongMaoTag = true;
+                       //  = false;
 
+                       io.publishTopic('CIR.pitchtone.transcript',JSON.stringify({
+                          'result':{'alternatives':[{'transcript':new_transcript}]}
+                       }
 
+                       ))
+                       setTimeout(function(){ XiongMaoTag = false; }, 3000);
 
                        continue;
                      }
@@ -518,11 +526,6 @@ function transcribe() {
                       }
                     }))
 
-                    io.publishTopic('CIR.pitchtone.transcript',JSON.stringify({
-                       'result':{'alternatives':[{'transcript':new_transcript}]}
-                    }
-
-                  ))
 
 
                     channels[i].lastMessageTimeStamp = new Date()

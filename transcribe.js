@@ -392,41 +392,35 @@ function transcribe() {
                             continue
                         }
 
-                        console.log('In Final')
-
                         // If requested, extract the audio for the next thing
                         // the person says, excluding a wake-up word
-                        if (extractRequested) {
-                            console.log('In Requested')
-                            if (transcript.startsWith('熊猫')) {
-                                console.log('In Match')
-                                let new_transcript = transcript.replace('熊猫', '').trim()
-                                let startTime = timestamps[0][2]
-                                let endTime = timestamps[timestamps.length - 1][2]
+                        if (extractRequested && transcript.startsWith('熊猫')) {
+                            let new_transcript = transcript.replace('熊猫', '').trim()
+                            let startTime = timestamps[0][2]
+                            let endTime = timestamps[timestamps.length - 1][2]
 
-                                // Remove the first element from the timestamps array, adjust
-                                // timestamps to match the audio file being sent out
-                                let new_timestamps = timestamps.shift()
-                                for (var k = 0; k < new_timestamps.length; k++) {
-                                    new_timestamps[k][1] -= startTime
-                                    new_timestamps[k][2] -= startTime
-                                }
-
-                                extractPhrase(new_transcript, i, startTime, endTime)
-                                io.publishTopic('CIR.pitchtone.transcript', JSON.stringify({
-                                    'result': {
-                                        'alternatives': [
-                                            {
-                                                'transcript': new_transcript,
-                                                'timestamps': new_timestamps
-                                            }
-                                        ]
-                                    }
-                                }))
-
-                                extractRequested = false
-                                break
+                            // Remove the first element from the timestamps array, adjust
+                            // timestamps to match the audio file being sent out
+                            let new_timestamps = timestamps.shift()
+                            for (var k = 0; k < new_timestamps.length; k++) {
+                                new_timestamps[k][1] -= startTime
+                                new_timestamps[k][2] -= startTime
                             }
+
+                            extractPhrase(new_transcript, i, startTime, endTime)
+                            io.publishTopic('CIR.pitchtone.transcript', JSON.stringify({
+                                'result': {
+                                    'alternatives': [
+                                        {
+                                            'transcript': new_transcript,
+                                            'timestamps': new_timestamps
+                                        }
+                                    ]
+                                }
+                            }))
+
+                            extractRequested = false
+                            break
                         }
                     }
 

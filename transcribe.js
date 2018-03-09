@@ -383,8 +383,6 @@ function transcribe() {
                 if (result.final) {
                     // find desired keywords in transcript..
                     for (var j = 0; j < result.alternatives.length; j++) {
-                        console.log('====================')
-                        console.log(result.alternatives[j])
                         let resultData = result.alternatives[j]
                         let transcript = resultData.transcript
                         let timestamps = resultData.timestamps
@@ -394,10 +392,14 @@ function transcribe() {
                             continue
                         }
 
+                        console.log('In Final')
+
                         // If requested, extract the audio for the next thing
                         // the person says, excluding a wake-up word
                         if (extractRequested) {
-                            if (transcript.localeCompare('熊猫') === 0) {
+                            console.log('In Requested')
+                            if (transcript.startsWith('熊猫')) {
+                                console.log('In Match')
                                 let new_transcript = transcript.replace('熊猫', '').trim()
                                 let startTime = timestamps[0][2]
                                 let endTime = timestamps[timestamps.length - 1][2]
@@ -410,7 +412,7 @@ function transcribe() {
                                     new_timestamps[k][2] -= startTime
                                 }
 
-                                extractPhrase(new_transcript, startTime, endTime)
+                                extractPhrase(new_transcript, i, startTime, endTime)
                                 io.publishTopic('CIR.pitchtone.transcript', JSON.stringify({
                                     'result': {
                                         'alternatives': [

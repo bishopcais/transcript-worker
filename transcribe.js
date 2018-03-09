@@ -1,15 +1,15 @@
-const _ = require('lodash');
+const _ = require('lodash')
 const spawn = require('child_process').spawn
 const CELIO = require('@cel/celio')
 const winston = require('winston')
 const SpeechToTextV1 = require('watson-developer-cloud/speech-to-text/v1')
-//const SpeechToTextV1 = require('./v1')
+// const SpeechToTextV1 = require('./v1')
 const stream = require('stream')
 const fs = require('fs')
 const RawIPC = require('node-ipc').IPC
 const wav = require('wav')
-const sampleRate = 16000;
-
+const CircularBuffer = require('./ringBuffer.js')
+const sampleRate = 16000
 
 if (!fs.existsSync('logs')) {
     fs.mkdirSync('logs')
@@ -42,18 +42,18 @@ io.config.defaults({
     'default_model': 'generic',
     'id': io.generateUUID(),
     'record': {
-      'enabled': false
+        'enabled': false
     }
 })
 
 var channelTypes = io.config.get('channels')
 logger.info(`Transcribing ${channelTypes.length} channels.`)
 
-var recordingEnabled = io.config.get('record:enabled');
-var recordingFile;
-var recordingObj = [];
+var recordingEnabled = io.config.get('record:enabled')
+var recordingFile
+var recordingObj = []
 if (recordingEnabled) {
-  recordingFile = io.config.get('record:file');
+    recordingFile = io.config.get('record:file')
 }
 
 const channels = []
@@ -73,11 +73,8 @@ io.store.onChange('transcript:keywords', () => {
 
 let currentKeywordsThreshold = 0.01
 
-const CircularBuffer = require('./ringBuffer.js');
-var rawAudioBuffer = new CircularBuffer(io.config.get('circular_buffer_size'));
-var phraseToExtract = "";
-var XiongMaoTag= false;
-var new_transcript = "";
+// var phraseToExtract = ''
+let extractRequested = false
 
 const speech_to_text = new SpeechToTextV1(io.config.get('STT'))
 
@@ -99,46 +96,45 @@ switch (process.platform) {
         device = `${io.config.get('device')}`
         break
 }
-io.onTopic('CIR.pitchtone.executor', msg=> {
-  msg = JSON.parse(msg);
-  if (msg.type === "start_listen"){
-    XiongMaoTag = true;
-    console.log("****" + "message receved");
-  }
-});
-io.onTopic('CIR.pitchtone.request', msg => {
-    msg = JSON.parse(msg);
-    phraseToExtract = msg.word;
+io.onTopic('CIR.pitchtone.executor', msg => {
+    msg = JSON.parse(msg)
+    if (msg.type === 'start_listen') {
+        extractRequested = true
+        // console.log("****" + "message receved");
+    }
 })
 
-io.onTopic('CIR.recording.command', msg => {
+/* io.onTopic('CIR.pitchtone.request', msg => {
     msg = JSON.parse(msg);
-    if (msg.enabled) {
-      recordingObj = [];
-      recordingFile = msg.file;
-      recordingEnabled = true;
-    }
-    else {
-      recordingObj = [];
-      recordingEnabled = false;
-    }
-});
+    phraseToExtract = msg.word;
+}) */
 
-io.onTopic('switchLanguage.transcript.command', msg =>{
-  stopCapture();
-  msg = JSON.parse(msg);
-  console.log('SWITCHING');
-  if (msg.hasOwnProperty('id') && msg.id > 0) {
-    channelTypes[msg.id] = msg.lang;
-  }
-  else {
-    langs = msg.micLang;
-    for (let i = 1; i<channelTypes.length && i< langs.length; ++i){
-      channelTypes[i] = langs[i];
+io.onTopic('CIR.recording.command', msg => {
+    msg = JSON.parse(msg)
+    if (msg.enabled) {
+        recordingObj = []
+        recordingFile = msg.file
+        recordingEnabled = true
+    } else {
+        recordingObj = []
+        recordingEnabled = false
     }
-  }
-  logger.info(channelTypes);
-  startCapture();
+})
+
+io.onTopic('switchLanguage.transcript.command', msg => {
+    stopCapture()
+    msg = JSON.parse(msg)
+    console.log('SWITCHING')
+    if (msg.hasOwnProperty('id') && msg.id > 0) {
+        channelTypes[msg.id] = msg.lang
+    } else {
+        let langs = msg.micLang
+        for (let i = 1; i < channelTypes.length && i < langs.length; ++i) {
+            channelTypes[i] = langs[i]
+        }
+    }
+    logger.info(channelTypes)
+    startCapture()
 })
 
 io.onTopic('switchModel.transcript.command', msg => {
@@ -159,7 +155,7 @@ io.onTopic('stopPublishing.transcript.command', () => {
 })
 
 io.doCall(`rpc-transcript-${io.config.get('id')}-tagChannel`, (request, reply) => {
-  logger.info('tagging');
+    logger.info('tagging')
     const input = JSON.parse(request.content.toString())
     if (channels.length > input.channelIndex) {
         logger.info(`Tagging channel ${input.channelIndex} with name: ${input.speaker}`)
@@ -211,6 +207,7 @@ class IPCInputStream extends stream.Readable {
 function startCapture() {
     for (let i = 0; i < channelTypes.length; i++) {
         let s, p
+        let rawBuffer = new CircularBuffer(io.config.get('circular_buffer_size'))
 
         if (channelTypes[i] !== 'none') {
             if (io.config.get('device') !== 'IPC') {
@@ -229,9 +226,8 @@ function startCapture() {
 
                 s = p.stdout
                 s.on('data', data => {
-                  rawAudioBuffer.write(data);
+                    rawBuffer.write(data)
                 })
-
             } else {
                 const ipc = new RawIPC()
                 ipc.config.rawBuffer = true
@@ -270,8 +266,9 @@ function startCapture() {
             channels[i].process = p
             channels[i].stream = s
             channels[i].lastMessageTimeStamp = new Date()
+            channels[i].rawBuffer = rawBuffer
         } else {
-            channels.push({ process: p, stream: s })
+            channels.push({ process: p, stream: s, rawBuffer: rawBuffer })
         }
     }
 
@@ -286,31 +283,27 @@ function stopCapture() {
             channels[i].process = null
         }
         channels[i].stream = null
+        channels[i].rawBuffer = null
     }
 }
-//if a pre defined keyword has been found in the transcript, extract the audio for the word and send it over RabbitMQ
-function extractPhrase(extractedWord, start, end) {
-  startIndex = (sampleRate * 2 * start)
-  endIndex = (sampleRate * 2 * end)
 
-  //extract audio bytes with given start and end indexes
-  var extractedAudioData = rawAudioBuffer.slice(startIndex, endIndex);
-  var writer = new wav.Writer({"sampleRate" : sampleRate, "channels" : 1});
-  writer.write(extractedAudioData, ()=>{
-    var extractedAudioFile = writer.read();
+// If a pre defined keyword has been found in the transcript, extract the
+// audio for the word and send it over RabbitMQ
+function extractPhrase(phrase, index, start, end) {
+    let startIndex = (sampleRate * 2 * start)
+    let endIndex = (sampleRate * 2 * end)
 
-    //after data has been extracted publish to rabbitmq..
-    console.log("extracted " + extractedWord + " for analysis");
-    if( XiongMaoTag == true){
-      io.publishTopic("CIR.pitchtone.audio", extractedAudioFile);
-    }
-  });
+    // extract audio bytes with given start and end indexes
+    let extractedAudioData = channels[index].rawBuffer.slice(startIndex, endIndex)
+    let writer = new wav.Writer({'sampleRate': sampleRate, 'channels': 1})
+    writer.write(extractedAudioData, () => {
+        let extractedAudioFile = writer.read()
+
+        // after data has been extracted publish to rabbitmq..
+        console.log('Extracted ' + phrase + ' for analysis')
+        io.publishTopic('CIR.pitchtone.audio', extractedAudioFile)
+    })
 }
-
-
-
-
-
 
 function transcribe() {
     logger.info(`Starting all channels with the ${currentModel} model.`)
@@ -319,13 +312,13 @@ function transcribe() {
         if (channelTypes[i] === 'none') {
             continue
         }
-        var current_model;
+        let current_model
 
-        if(channelTypes[i] === "en-US")
-          current_model="en-US_BroadbandModel";
-        else if(channelTypes[i] === "zh-CN")
-          current_model="zh-CN_BroadbandModel";
-
+        if (channelTypes[i] === 'en-US') {
+            current_model = 'en-US_BroadbandModel'
+        } else if (channelTypes[i] === 'zh-CN') {
+            current_model = 'zh-CN_BroadbandModel'
+        }
 
         const params = {
             model: current_model,
@@ -333,9 +326,10 @@ function transcribe() {
             inactivity_timeout: -1,
             smart_formatting: true,
             interim_results: true
-        };
-        if (current_model === "en-US_BroadbandModel") {
-          params.customization_id = io.config.get('STT:customization_id');
+        }
+
+        if (current_model === 'en-US_BroadbandModel') {
+            params.customization_id = io.config.get('STT:customization_id')
         }
 
         if (models[currentModel]) {
@@ -364,7 +358,6 @@ function transcribe() {
 
         textStream.setEncoding('utf8')
         textStream.on('results', input => {
-
             const result = input.results[0]
             if (result && publish) {
                 // See if we should clear speaker name
@@ -373,9 +366,9 @@ function transcribe() {
                     channels[i].speaker = undefined
                 }
 
-                let total_time = 0;
+                let total_time = 0
                 if (result.final && result.alternatives && result.alternatives[0].timestamps) {
-                    total_time = _.last(_.last(result.alternatives[0].timestamps));
+                    total_time = _.last(_.last(result.alternatives[0].timestamps))
                 }
 
                 const msg = {
@@ -388,153 +381,71 @@ function transcribe() {
                 }
 
                 if (result.final) {
-                  //find desired keywords in transcript..
-                  for(var k = 0; k < result.alternatives.length; k++){
-                    console.log("====================");
-                     console.log(result.alternatives[k]);
-                    let resultData = result.alternatives[k];
-                    let transcript = resultData.transcript;
-                    let timestamps = resultData.timestamps;
+                    // find desired keywords in transcript..
+                    for (var j = 0; j < result.alternatives.length; j++) {
+                        console.log('====================')
+                        console.log(result.alternatives[j])
+                        let resultData = result.alternatives[j]
+                        let transcript = resultData.transcript
+                        let timestamps = resultData.timestamps
 
-
-
-                    var firstword = "";
-                    var currentwordlength=0;
-                    //check if the word "xiongmao" exists in the transcript
-                    for(var m=0;m<transcript.length;m++){
-                    if(currentwordlength==2){
-                      break;
-                     }
-                     if(transcript[m]!=" "){
-                       firstword = firstword.concat(transcript[m]);
-                      currentwordlength++;
-                     }
-                    }
-                    console.log("the first word is");
-                    console.log(firstword);
-
-
-
-
-                   let phraseIndex = transcript.indexOf(phraseToExtract);
-                   if (!timestamps || phraseIndex == -1) {
-                     continue;
-                   }
-
-                    //TODO this logic probably doesn't handle a lot of edge cases. Do more thorough testing
-                    let matchBuffer = transcript;
-                    let startTime = 0, endTime = 0;
-                    for(let j = 0; j < timestamps.length; j++){
-                      let charIndex = matchBuffer.indexOf(timestamps[j][0]);
-
-                      //Break when we stop finding matches after we've found the first match
-                     if (charIndex == -1 && startTime != 0) {
-                        break;
-                      }
-                      else if (charIndex != -1) {
-                        //Strip the match out to prevent extra long matches.
-                        //e.g. searching for "banana bread" in transcript "banana bread bread banana"
-                        matchBuffer = matchBuffer.substring(charIndex + timestamps[j][0].length).trim();
-
-                        //First match sets both start and end times, further matches only update the end time
-                        if (startTime == 0) {
-                          startTime = timestamps[j][1];
+                        // Need timestamps for this to work
+                        if (!timestamps) {
+                            continue
                         }
 
-                        endTime = timestamps[j][2];
-                      }
+                        // If requested, extract the audio for the next thing
+                        // the person says, excluding a wake-up word
+                        if (extractRequested) {
+                            if (transcript.localeCompare('熊猫') === 0) {
+                                let new_transcript = transcript.replace('熊猫', '').trim()
+                                let startTime = timestamps[0][2]
+                                let endTime = timestamps[timestamps.length - 1][2]
+
+                                // Remove the first element from the timestamps array, adjust
+                                // timestamps to match the audio file being sent out
+                                let new_timestamps = timestamps.shift()
+                                for (var k = 0; k < new_timestamps.length; k++) {
+                                    new_timestamps[k][1] -= startTime
+                                    new_timestamps[k][2] -= startTime
+                                }
+
+                                extractPhrase(new_transcript, startTime, endTime)
+                                io.publishTopic('CIR.pitchtone.transcript', JSON.stringify({
+                                    'result': {
+                                        'alternatives': [
+                                            {
+                                                'transcript': new_transcript,
+                                                'timestamps': new_timestamps
+                                            }
+                                        ]
+                                    }
+                                }))
+
+                                extractRequested = false
+                                break
+                            }
+                        }
                     }
-
-                    if (startTime != 0 && endTime > startTime) {
-                      //extractPhrase(phraseToExtract, startTime, endTime);
-
-                      //send next (speech+txt) starting with XiongMao (currently it sends whatever word it has)
-                      console.log(transcript);
-                      console.log(phraseToExtract);
-                    var compare_string = firstword.localeCompare("熊猫");
-                    //extractPhrase(transcript, startTime, endTime);
-                    //each time run the program, check for XiongMao to start
-                    if(XiongMaoTag == true){
-                      if(compare_string == 0){
-                       console.log("is XiongMao");
-                       for( var s=0; s< timestamps.length;s++){
-                         if(timestamps[s][0]=="熊猫"){
-                           startTime = timestamps[s][2];
-                         }
-                       }
-
-
-                       transcript=transcript.replace("熊猫","");
-                       new_transcript = transcript;
-                      console.log("new_transcript")
-                      console.log(new_transcript)
-
-
-
-
-                    /*
-                       for (var w in resultData){
-                         if(w=="transcript"){
-                           resultData.transcript = new_transcript;
-                         }
-                         is (w=="timestamp"){
-                           for(var t in resultData.timestamps){
-                             if(t[0]=="熊猫"){
-                               delete resultData.timestamps[t];
-                             }
-                           }
-                         }
-
-                       }
-                    */
-                       extractPhrase(transcript, startTime, endTime);
-                      //transcript= transcript.replace("熊猫","");
-                      // new_transcript= transcript;
-                       //  = false;
-
-                       io.publishTopic('CIR.pitchtone.transcript',JSON.stringify({
-                          'result':{'alternatives':[{'transcript':new_transcript}]}
-                       }
-
-                       ))
-                       setTimeout(function(){ XiongMaoTag = false; }, 3000);
-
-                       continue;
-                     }
-
-                   }else{
-                       console.log("new_transcript")
-                     new_transcript =transcript;
-
-                     extractPhrase(transcript, startTime, endTime);
-                   }
-
-
-                    }
-
-                  }
-
 
                     logger.info(JSON.stringify(msg))
 
-                    //TODO get Unity to directly read from transcript queue instead
-                    io.publishTopic('command.firstplayable.client',JSON.stringify({
-                      'type':'chat_log_append',
-                      'details':{
-                        'text':msg.result.alternatives[0].transcript
-                      //'text':msg.transcript
-                      }
+                    // TODO get Unity to directly read from transcript queue instead
+                    io.publishTopic('command.firstplayable.client', JSON.stringify({
+                        'type': 'chat_log_append',
+                        'details': {
+                            'text': msg.result.alternatives[0].transcript
+                            // 'text':msg.transcript
+                        }
                     }))
-
-
 
                     channels[i].lastMessageTimeStamp = new Date()
 
                     if (recordingEnabled) {
-                        recordingObj.push(msg);
+                        recordingObj.push(msg)
                         fs.writeFileSync(recordingFile, JSON.stringify({
-                          "transcripts": recordingObj
-                        }));
+                            'transcripts': recordingObj
+                        }))
                     }
                 }
 
@@ -549,7 +460,7 @@ function transcribe() {
                 }
             }
 
-            //test code for chinese service from wen & kelvin
+            // test code for chinese service from wen & kelvin
             /*
             const result = input.results
             if (result && publish){
@@ -575,8 +486,7 @@ function transcribe() {
                     logger.info('Resume listening.')
                     publish = true
                 }
-            }*/
-
+            } */
         })
     }
 }

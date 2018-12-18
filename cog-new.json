@@ -1,0 +1,12 @@
+{
+    "customization_models": {
+        "en-US": ""
+    },
+    "channels": [
+      {
+        "field": "near | far",
+        "language": "en-US",
+        "model": "broad | narrow"
+      }
+    ]
+}

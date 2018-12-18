@@ -1,17 +1,26 @@
 {
   "name": "transcript-worker",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "main": "transcribe.js",
   "scripts": {
     "start": "node transcribe.js"
   },
-  "author": "Yunfeng Zhang",
+  "contributors": [
+    {
+      "name": "Yunfeng Zhang",
+      "email": "zhangyun@us.ibm.com"
+    },
+    {
+      "name": "Matthew Peveler",
+      "email": "pevelm@rpi.edu"
+    }
+  ],
   "private": true,
   "dependencies": {
-    "@cel/celio": "^2.0.0",
-    "node-ipc": "^8.1.1",
-    "watson-developer-cloud": "^2.9.0",
-    "wav": "^1.0.1",
-    "winston": "^2.2.0"
+    "@cisl/celio": "^3.0.0",
+    "@cisl/logger": "^1.0.0",
+    "@cisl/binary-ring-buffer": "^1.0.0",
+    "watson-developer-cloud": "^3.12.0",
+    "wav": "^1.0.2"
   }
 }

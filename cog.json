@@ -3,16 +3,15 @@
   "args": [
     "transcribe.js"
   ],
-  "watcher": "http://128.113.21.67:7777",
-  "id": "multichannel-transcript-worker",
+  "watcher": "http://localhost:7777",
+  "id": "transcript-worker",
   "description": "STT for applications",
   "tags": ["tts", "worker"],
-  "log": "transcript-worker.log",
+  "log": "logs/transcript-worker.log",
   "mq": {
-    "url": "128.113.21.67",
-    "username": "audio",
-    "password": "audio",
-    "exchange": "amq.topic"
+    "url": "localhost",
+    "username": "guest",
+    "password": "guest"
   },
   "STT": {
     "url": "https://stream.watsonplatform.net/speech-to-text/api",
@@ -22,13 +21,13 @@
     "customization_id": "d8e0d680-8653-11e6-bae7-1583ef8b8b73"
   },
   "store": {
-    "url": "128.113.21.67:6379"
+    "url": "localhost:6379"
   },
   "record": {
-    "enabled": true,
+    "enabled": false,
     "file": "recording.json"
   },
-  "channels": ["en-US", "en-US", "en-US", "zh-CN", "zh-CN", "zh-CN"],
+  "channels": ["en-US"],
   "keywords": ["watson", "celia"],
   "device": "default",
   "circular_buffer_size": 512000,

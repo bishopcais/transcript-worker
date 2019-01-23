@@ -1,6 +1,7 @@
 const spawn = require('child_process').spawn;
 const fs = require('fs');
 const stream = require('stream');
+const wav = require('wav');
 
 const BinaryRingBuffer = require('@cisl/binary-ring-buffer');
 const CELIO = require('@cisl/celio');
@@ -35,6 +36,7 @@ io.config.defaults({
     enabled: false,
     file: 'recording.json'
   },
+  sample_rate: 16000,
   buffer_size: 1000,
   speaker_id_duration: 5 * 6000
 });
@@ -99,7 +101,7 @@ function transcribeChannel(watson_stt, idx, channel) {
   let params = {
     objectMode: true,
     model: getModelName(channel.language, channel.model),
-    content_type: `audio/l16; rate=16000; channels=1`,
+    content_type: `audio/l16; rate=${io.config.get('sample_rate')}; channels=1`,
     inactivity_timeout: -1,
     timestamps: true,
     smart_formatting: true,
@@ -112,6 +114,7 @@ function transcribeChannel(watson_stt, idx, channel) {
     if (data.results && data.results[0] && data.results[0].alternatives && publish && !channel.paused) {
       let result = data.results[0];
       let transcript = result.alternatives[0];
+      transcript.transcript = transcript.transcript.trim();
       let total_time = 0;
       if (transcript.timestamps) {
         total_time = Math.round((last(last(transcript.timestamps)) - transcript.timestamps[0][1]) * 100) / 100;
@@ -134,6 +137,23 @@ function transcribeChannel(watson_stt, idx, channel) {
         total_time: total_time,
         result: result
       };
+
+      if (channel.extract_requested && io.mq) {
+        channel.extract_requested = false;
+        let start_time = transcript.timestamps[0][1];
+        let end_time = last(last(transcript.timestamps));
+
+        let start_index = (io.config.get('sample_rate') * 2 * start_time);
+        let end_index = (io.config.get('sample_rate') * 2 * end_time);
+
+        // extract audio bytes with given start and end indexes
+        let writer = new wav.Writer({'sampleRate': io.config.get('sample_rate'), 'channels': 1});
+        writer.write(channel.raw_buffer.slice(start_index, end_index), () => {
+          // after data has been extracted publish to rabbitmq..
+          console.log(`Extracted ${msg.transcript} for analysis`);
+          io.publishTopic('transcript.pitchtone.audio', writer.read());
+        });
+      }
 
       let record = io.config.get('record');
       if (record && record.enabled && result.final) {
@@ -184,6 +204,7 @@ async function startTranscriptWorker() {
     channel.paused = false;
     channel.last_message_timestamp = null;
     channel.speaker = undefined;
+    channel.extract_requested = false;
     channel.raw_buffer = new BinaryRingBuffer(io.config.get('buffer_size'));
 
     if (channel.device === 'ipc') {
@@ -196,7 +217,7 @@ async function startTranscriptWorker() {
         '-f', device_info.interface,
         '-i', device_info.device,
         '-map_channel', `0.0.${channel.idx}`,
-        '-acodec', 'pcm_s16le', '-ar', '16000',
+        '-acodec', 'pcm_s16le', '-ar', io.config.get('sample_rate'),
         '-f', 'wav', '-'
       ];
 
@@ -282,6 +303,12 @@ async function startTranscriptWorker() {
         if (msg.speaker && msg.channel_idx && !isNaN(parseInt(msg.channel_idx))) {
           logger.info(`Identifying speaker '${msg.speaker}' for channel ${msg.channel_idx}`);
           channels[msg.channel_idx].speaker = msg.speaker;
+        }
+      }
+      else if (msg.command === 'extract_pitchtone') {
+        if (msg.channel_idx) {
+          logger.info(`Extract requested for channel ${msg.channel_idx}`);
+          channels[msg.channel_idx].extract_requested = true;
         }
       }
     });

@@ -227,7 +227,6 @@ async function startTranscriptWorker() {
 
   if (io.mq) {
     io.mq.onTopic('transcript.command', msg => {
-      msg = JSON.parse(msg);
       if (msg.command === 'switch_language') {
         logger.info(`Switching languages for ${(!msg.channel_idx || isNaN(parseInt(msg.channel_idx))) ? 'all' : msg.channel_idx} to ${msg.language}`);
         if (!msg.channel_idx || isNaN(parseInt(msg.channel_idx))) {

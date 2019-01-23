@@ -3,7 +3,7 @@ cog.json
 .vscode
 logs
 npm-debug.log
-TODO.md
 *.log
 recording.json
+recording.txt
 *.wav

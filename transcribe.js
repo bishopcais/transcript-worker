@@ -1,224 +1,331 @@
 const spawn = require('child_process').spawn;
+const fs = require('fs');
+const stream = require('stream');
+
+const BinaryRingBuffer = require('@cisl/binary-ring-buffer');
 const CELIO = require('@cisl/celio');
 const logger = require('@cisl/logger');
-const BinaryRingBuffer = require('@cisl/binary-ring-buffer');
-const SpeechToTextV1 = require('watson-developer-cloud/speech-to-text/v1');
-const stream = require('stream');
-const utils = require('./utils');
-const Channel = require('./channel');
 
-// 5 minutes (in milliseconds)
-const speaker_id_duration = 5 * 60000;
+const SpeechToTextV1 = require('watson-developer-cloud/speech-to-text/v1');
+
+let publish = true;
 
 const io = new CELIO();
-io.config.required(['STT:username', 'STT:password', 'device']);
+io.config.required(['STT:username', 'STT:password']);
 io.config.defaults({
   channels: [
     {} // Create a channel that uses all defaults
   ],
-  device: 'default',
-  model: 'broad',
+  customizations: {
+    acoustic: {
+    },
+    language: {
+    }
+  },
+  default_device: 'default',
+  default_language: 'en-US',
+  default_model: 'broad',
+  default_acoustic_customization: {
+    'en-US': null
+  },
+  default_language_customization: {
+    'en-US': null
+  },
   record: {
     enabled: false,
     file: 'recording.json'
   },
-  buffer_size: 1000
+  buffer_size: 1000,
+  speaker_id_duration: 5 * 6000
 });
 
-const model = io.config.get('model').charAt(0).toUpperCase() + io.config.get('model').slice(1);
-let language_models = ['en-US_BroadbandModel'];
-const watson_stt = new SpeechToTextV1(io.config.get('STT'));
-watson_stt.listModels(null, (err, models) => {
-  if (err) {
-    logger.error(`Error getting models: ${err}`);
-  }
-  language_models = models;
-});
-
-let channels = [];
-for (let channel of io.config.get('channels')) {
-  channel = new Channel(channel);
-  channels.push(new Channel(channel));
+if (!io.mq) {
+  logger.warn('Only printing to console, could not find RabbitMQ.');
 }
 
-let publish = true;
-
-logger.info(`Transcribing ${io.config.get('channels').length} channels`);
-
-let device_interface, device;
-
-function getModelName(channel) {
-  return `${channel.language}_${channel.model}bandModel`;
+if (!(['broad', 'narrow'].includes(io.config.get('default_model')))) {
+  logger.error(`Unsupported model (broad or narrow): ${io.config.get('default_model')}`);
+  process.exit();
 }
 
-function checkChannelIndex() {
-
-}
-
-io.rabbitmq.onTopic('transcript.command', (msg) => {
-  logger.info('Transcript command received:');
-  logger.info(msg);
-  if (msg.mic_index && checkChannelIndex(msg.mic_index)) {
-
-  }
-
-  if (msg.command === 'switch_language') {
-    logger.info(`Switching microphone ${msg.mic_index} from '${mics[msg.mic_index].language}' to ${msg.language}`);
-  }
-  else if (msg.command === 'switch_model') {
-    // pass
-  }
-  else if (msg.command === 'stop_publishing') {
-    if (msg.mic_index) {
-      if (mics[msg.mic_index] != null) {
-        logger.error('Invalid mic index requested to stop publishing');
+function getLanguageModels(watson_stt) {
+  return new Promise((resolve, reject) => {
+    watson_stt.listModels(null, (err, models) => {
+      if (err) {
+        reject(err);
       }
       else {
-
-      }
-    }
-    else {
-      publish = false;
-      logger.info('Stop publishing transcripts');
-    }
-  }
-  else if (msg.command === 'start_publishing') {
-    if (msg.mic_index) {
-
-    }
-    else {
-      publish = true;
-      logger.info('Start publishing transcripts');
-    }
-  }
-});
-
-function setDefaultChannelValues(channels) {
-  for (let i = 0; i < channels.length; i++) {
-    if (!channels[i].language) {
-      channels[i].language = 'en-US';
-    }
-    if (!channels[i].type) {
-      channels[i].type = 'far';
-    }
-    if (!channels[i].model) {
-      channels[i].model = 'broad';
-    }
-    channels[i].index = i;
-  }
-}
-
-function transcribe() {
-  logger.info(`Starting all channels.`);
-
-  for (let channel of channels) {
-    if (channel.type === 'none') {
-      continue;
-    }
-
-    let current_model = getModelName(channel);
-
-    const params = {
-      model: current_model,
-      content_type: 'audio/l16; rate=16000; channels=1',
-      inactivity_timeout: -1,
-      smart_formatting: true,
-      interim_results: true
-    };
-
-    const stt_stream = watson_stt.createRecognizeStream(params);
-    stt_stream.on('error', (err) => {
-      if (err.message) {
-        logger.error(err.message);
-        logger.info('An error occurred. Restarting SST in 1 second');
-        // TODO: delayedRestart()
-      }
-      else {
-        logger.error('Could not connect to STT server');
+        resolve(models.models);
       }
     });
-
-    const text_stream = channel.stream.pipe(stt_stream);
-
-    text_stream.setEncoding('utf8');
-    text_stream.on('results', (output) => {
-      const result = output.results[0];
-      if (result && publish) {
-        if (channel.speaker) {
-          logger.info(`Clear tag for channel ${channel.index}`);
-          channel.speaker = undefined;
-        }
-
-        let total_time = 0;
-        if (result.final && result.alternatives && result.alternatives[0].timestamps) {
-          total_time = utils.last(utils.last(result.alternatives[0].timestamps));
-        }
-
-        const msg = {
-          channel_name: channel.type,
-          channel_index: channel.index,
-          result: result,
-          speaker: channel.speaker,
-          total_time: total_time
-        };
-
-        logger.info(msg);
-      }
-    });
-  }
+  });
 }
 
-function startCapturing() {
-  let device_info = utils.getDeviceInfo(io.config.get('device'));
+function getModelName(language, model) {
+  return language + '_' + model.substr(0, 1).toUpperCase() + model.substr(1) + 'bandModel';
+}
+
+function getDeviceInfo(device_name) {
+  let device_interface, device;
+  switch (process.platform) {
+    case 'darwin':
+      device_interface = 'avfoundation';
+      device = `none:${device_name}`;
+      break;
+    case 'win32':
+      device_interface = 'dshow';
+      device = `audio=${device_name}`;
+      break;
+    default:
+      device_interface = 'alsa';
+      device = device_name;
+      break;
+  }
+  return {
+    interface: device_interface,
+    device: device
+  };
+}
+
+function last(array) {
+  const length = array === null ? 0 : array.length;
+  return length ? array[length - 1] : undefined;
+}
+
+function transcribeChannel(watson_stt, idx, channel) {
+  if (channel.stt_stream) {
+    channel.stt_stream.destroy();
+  }
+  let params = {
+    objectMode: true,
+    model: getModelName(channel.language, channel.model),
+    content_type: `audio/l16; rate=16000; channels=1`,
+    inactivity_timeout: -1,
+    timestamps: true,
+    smart_formatting: true,
+    interim_results: true
+  };
+
+  channel.stt_stream = watson_stt.recognizeUsingWebSocket(params);
+  channel.stream.pipe(channel.stt_stream);
+  channel.stt_stream.on('data', (data) => {
+    if (data.results && data.results[0] && data.results[0].alternatives && publish && !channel.paused) {
+      let result = data.results[0];
+      let transcript = result.alternatives[0];
+      let total_time = 0;
+      if (transcript.timestamps) {
+        total_time = Math.round((last(last(transcript.timestamps)) - transcript.timestamps[0][1]) * 100) / 100;
+      }
+
+      if (channel.speaker && (new Date() - channel.last_message_timestamp > io.config.get('speaker_id_duration'))) {
+        logger.info(`Clear tag for channel ${idx} (${channel.speaker}).`);
+        channel.speaker = undefined;
+      }
+
+      channel.last_message_timestamp = new Date();
+
+      let msg = {
+        worker_id: io.config.get('id') || 'transcript-worker',
+        message_id: io.generateUUID(),
+        timestamp: channel.last_message_timestamp,
+        channel_idx: idx,
+        speaker: channel.speaker,
+        transcript: transcript.transcript,
+        total_time: total_time,
+        result: result
+      };
+
+      let record = io.config.get('record');
+      if (record && record.enabled && result.final) {
+        fs.appendFileSync(record.file, transcript.transcript, 'utf8');
+      }
+
+      if (result.final) {
+        logger.info(`Transcript: ${JSON.stringify(msg, null, 2)}`);
+      }
+
+      if (io.mq) {
+        io.mq.publishTopic(`transcript.result.${result.final ? 'final' : 'interim'}`, JSON.stringify(msg));
+      }
+    }
+  });
+}
+
+async function startTranscriptWorker() {
+  const watson_stt = new SpeechToTextV1(io.config.get('STT'));
+
+  let models = await getLanguageModels(watson_stt);
+  let model_names = [];
+  let languages = [];
+  for (let model of models) {
+    if (!(languages.includes(model.language))) {
+      languages.push(model.language);
+    }
+    model_names.push(model.name);
+  }
   let channels = io.config.get('channels');
-  for (let i = 0; i < channels.length; i++) {
-    let channel = channels[i];
-    let raw_buffer = new BinaryRingBuffer(io.config.get('buffer_size'));
-    let args = [
-      '-v', 'error',
-      '-f', device_info['interface'],
-      '-i', device_info['device'],
-      '-map_channel', `0.0.${i}`,
-      '-acodec', 'pcm_s16le', '-ar', '16000',
-      '-f', 'wav', '-'
-    ];
+  logger.info(`Starting ${channels.length}:`);
+  for (let idx = 0; idx < channels.length; idx++) {
+    let channel = channels[idx];
+    channel.idx = channel.idx || idx;
+    channel.device = channel.device || io.config.get('default_device');
+    channel.language = channel.language || io.config.get('default_language');
+    if (!(languages.includes(channel.language))) {
+      logger.error(`Invalid language for channel ${idx}: ${channel.language}`);
+      return;
+    }
+    channel.model = channel.model || io.config.get('default_model');
+    let model_full = getModelName(channel.language, channel.model);
+    if (!model_names.includes(model_full)) {
+      logger.error(`Invalid model for channel ${idx}: ${channel.model} (${model_full})`);
+      return;
+    }
 
-    let p = spawn('ffmpeg', args);
+    channel.paused = false;
+    channel.last_message_timestamp = null;
+    channel.speaker = undefined;
+    channel.raw_buffer = new BinaryRingBuffer(io.config.get('buffer_size'));
 
-    p.stderr.on('data', (data) => {
-      logger.error(data.toString());
-      process.exit(1);
-    });
+    if (channel.device === 'ipc') {
 
-    let s = p.stdout;
-    s.on('data', data => {
-      raw_buffer.write(data);
-    });
+    }
+    else {
+      let device_info = getDeviceInfo(channel.device);
+      let args = [
+        '-v', 'error',
+        '-f', device_info.interface,
+        '-i', device_info.device,
+        '-map_channel', `0.0.${channel.idx}`,
+        '-acodec', 'pcm_s16le', '-ar', '16000',
+        '-f', 'wav', '-'
+      ];
 
-    if (channel.type === 'far') {
-      let paused = false;
+      channel.process = spawn('ffmpeg', args);
 
-      // on begin speak
-      // on end speak
+      channel.process.stderr.on('data', data => {
+        logger.error(data.toString());
+        process.exit(1);
+      });
 
-      const pausable = new stream.Transform();
-      pausable._transform = (chunk, encoding, callback) => {
-        if (!paused) {
+      channel.stream = channel.process.stdout;
+      channel.stream.on('data', (data) => {
+        channel.raw_buffer.write(data);
+      });
+
+      const pausable = stream.Transform();
+      pausable._transform = function(chunk, encoding, callback) {
+        if (!channel.paused) {
           this.push(chunk);
         }
         callback();
       };
 
-      s = s.pipe(pausable);
-      channels[i].process = p;
-      channels[i].stream = s;
-      channels[i].last_message_timestamp = new Date();
-      channels[i].raw_buffer = raw_buffer;
+      channel.stream = channel.stream.pipe(pausable);
     }
+    logger.info(`  ${idx}: ${channel.language} - ${channel.model} - ${channel.device}`);
   }
 
-  transcribe();
+  if (io.mq) {
+    io.mq.onTopic('transcript.command', msg => {
+      msg = JSON.parse(msg);
+      if (msg.command === 'switch_language') {
+        logger.info(`Switching languages for ${(!msg.channel_idx || isNaN(parseInt(msg.channel_idx))) ? 'all' : msg.channel_idx} to ${msg.language}`);
+        if (!msg.channel_idx || isNaN(parseInt(msg.channel_idx))) {
+          for (let idx = 0; idx < channels.length; idx++) {
+            if (!model_names.includes(getModelName(msg.language, channels[idx].model))) {
+              logger.warn(`Invalid model for channel ${msg.channel_idx}: ${getModelName(msg.language, channels[idx].model)}`);
+              continue;
+            }
+            channels[idx].language = msg.language;
+            transcribeChannel(watson_stt, idx, channels[idx]);
+          }
+        }
+        else if (!isNaN(parseInt(msg.channel_idx))) {
+          if (!model_names.includes(getModelName(msg.language, channels[msg.channel_idx].model))) {
+            logger.warn(`Invalid model for channel ${msg.channel_idx}: ${getModelName(msg.language, channels[msg.channel_idx].model)}`);
+          }
+          else {
+            transcribeChannel(watson_stt, parseInt(msg.channel_idx), channels[parseInt(msg.channel_idx)]);
+          }
+        }
+      }
+      else if (msg.command === 'pause') {
+        logger.info(`Pausing channel ${(!msg.channel_idx || isNaN(parseInt(msg.channel_idx))) ? 'all' : msg.channel_idx}`);
+        if (!msg.channel_idx || isNaN(parseInt(msg.channel_idx))) {
+          for (let idx = 0; idx < channels.length; idx++) {
+            channels[idx].paused = true;
+          }
+        }
+        else if (!isNaN(parseInt(msg.channel_idx))) {
+          channels[parseInt(msg.channel_idx)] = true;
+        }
+      }
+      else if (msg.command === 'unpause') {
+        logger.info(`Unpausing channel ${(!msg.channel_idx || isNaN(parseInt(msg.channel_idx))) ? 'all' : msg.channel_idx}`);
+        if (!msg.channel_idx || isNaN(parseInt(msg.channel_idx))) {
+          for (let idx = 0; idx < channels.length; idx++) {
+            channels[idx].paused = false;
+          }
+        }
+        else if (!isNaN(parseInt(msg.channel_idx))) {
+          channels[parseInt(msg.channel_idx)] = false;
+        }
+      }
+      else if (msg.command === 'stop_publish') {
+        logger.info('Stopping publishing');
+        publish = false;
+      }
+      else if (msg.command === 'start_publish') {
+        logger.info('Starting publishing');
+        publish = true;
+      }
+      else if (msg.command === 'identify_speaker') {
+        if (msg.speaker && msg.channel_idx && !isNaN(parseInt(msg.channel_idx))) {
+          logger.info(`Identifying speaker '${msg.speaker}' for channel ${msg.channel_idx}`);
+          channels[msg.channel_idx].speaker = msg.speaker;
+        }
+      }
+    });
+  }
+
+  logger.info(`Starting transcription`);
+  for (let idx = 0; idx < channels.length; idx++) {
+    transcribeChannel(watson_stt, idx, channels[idx]);
+  }
 }
 
-setDefaultChannelValues();
-startCapturing();
+function stopTranscriptWorker() {
+  logger.info('Stopping all channels.');
+  for (let channel of io.config.get('channels')) {
+    if (channel.process) {
+      channel.process.kill();
+      channel.process = null;
+    }
+    channel.stream = null;
+    channel.raw_buffer = null;
+  }
+}
+
+function exitHandler(options, err) {
+  if (options.cleanup) {
+    stopTranscriptWorker();
+  }
+  if (err) {
+    console.log(err.stack);
+  }
+  if (options.exit) {
+    process.exit();
+  }
+}
+
+// do something when app is closing
+process.on('exit', exitHandler.bind(null, { cleanup: true }));
+
+// catches ctrl+c event
+process.on('SIGINT', exitHandler.bind(null, { exit: true }));
+process.on('SIGTERM', exitHandler.bind(null, { exit: true }));
+
+// catches uncaught exceptions
+process.on('uncaughtException', exitHandler.bind(null, { exit: true }));
+
+startTranscriptWorker();

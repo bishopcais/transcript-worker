@@ -188,12 +188,13 @@ base structure:
 Where `command` can be one of the following:
 * switch_language
 * identify_speaker
+* extract_pitchtone
 * pause
 * unpause
 * stop_publish
 * start_publish
 
-The first four commands also accept a `channel_idx` parameter to specify a specific channel
+The first five commands also accept a `channel_idx` parameter to specify a specific channel
 to operate on, else it will run the command on all channels.
 
 `switch_language` accepts a `language` parameter.

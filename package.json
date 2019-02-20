@@ -17,9 +17,10 @@
   ],
   "private": true,
   "dependencies": {
-    "@cisl/celio": "^3.0.0",
-    "@cisl/logger": "^1.0.0",
     "@cisl/binary-ring-buffer": "^1.0.0",
+    "@cisl/cais-express": "^1.1.0",
+    "@cisl/celio": "^3.0.0",
+    "@cisl/logger": "^1.1.0",
     "watson-developer-cloud": "^3.16.1",
     "wav": "^1.0.2"
   }

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>transcript-worker</title>
+    <style>
+body {
+    padding-top:50px;
+}
+    </style>
+</head>
+<body class="container">
+
+<main>
+    <p>Welcome</p>
+    <ul>
+        <% channels.forEach((channel) => { %>
+            <li><%= channel.idx %>: <%= channel.language %> (<%= channel.speaker %>)</li>
+        <% }); %>
+    </ul>
+</main>
+
+</body>
+</html>

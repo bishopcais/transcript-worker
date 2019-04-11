@@ -7,7 +7,7 @@ const BinaryRingBuffer = require('@cisl/binary-ring-buffer');
 const io = require('@cisl/celio');
 const logger = require('@cisl/logger');
 
-const SpeechToTextV1 = require('watson-developer-cloud/speech-to-text/v1');
+const SpeechToTextV1 = require('ibm-watson/speech-to-text/v1');
 
 let publish = true;
 
@@ -158,7 +158,8 @@ function transcribeChannel(watson_stt, idx, channel) {
       }
 
       if (result.final) {
-        logger.info(`Transcript (Channel ${msg.channel_idx}): ${JSON.stringify(msg, null, 2)}`);
+        logger.info(`Transcript (Channel ${msg.channel_idx}): ${msg.transcript}`);
+        logger.debug(`Transcript (Channel ${msg.channel_idx}): ${JSON.stringify(msg, null, 2)}`);
       }
 
       if (io.mq) {

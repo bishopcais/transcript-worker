@@ -1,5 +1,4 @@
 const spawn = require('child_process').spawn;
-const fs = require('fs');
 const stream = require('stream');
 const wav = require('wav');
 
@@ -31,10 +30,6 @@ io.config.defaults({
   },
   default_language_customization: {
     'en-US': null
-  },
-  record: {
-    enabled: false,
-    file: 'recording.json'
   },
   sample_rate: 16000,
   buffer_size: 1000,
@@ -124,10 +119,13 @@ function transcribeChannel(watson_stt, idx, channel) {
 
       let speaker_duration = io.config.get('speaker_id_duration');
 
-      if (channel.speaker && speaker_duration > 0 && (new Date() - channel.last_message_timestamp) > speaker_duration) {
+      if (speaker_duration !== false &&
+          channel.speaker && speaker_duration > 0 && 
+          (new Date() - channel.last_message_timestamp) > speaker_duration) {
         logger.info(`Clear tag for channel ${idx} (${channel.speaker}).`);
         channel.speaker = undefined;
       }
+
 
       channel.last_message_timestamp = new Date();
 
@@ -159,13 +157,8 @@ function transcribeChannel(watson_stt, idx, channel) {
         });
       }
 
-      let record = io.config.get('record');
-      if (record && record.enabled && result.final) {
-        fs.appendFileSync(record.file, transcript.transcript, 'utf8');
-      }
-
       if (result.final) {
-        logger.info(`Transcript: ${JSON.stringify(msg, null, 2)}`);
+        logger.info(`Transcript (Channel ${msg.channel_idx}): ${JSON.stringify(msg, null, 2)}`);
       }
 
       if (io.mq) {
@@ -307,17 +300,17 @@ async function startTranscriptWorker() {
       publish = true;
     });
 
-    io.mq.onTopic('transcript.command.identify_speaker', msg => {
-      if (msg.speaker && msg.channel_idx && !isNaN(parseInt(msg.channel_idx))) {
-        logger.info(`Identifying speaker '${msg.speaker}' for channel ${msg.channel_idx}`);
-        channels[msg.channel_idx].speaker = msg.speaker;
+    io.mq.onTopic('transcript.command.extract_pitchtone', msg => {
+      if (msg.channel_idx && channels[msg.channel_idx]) {
+        logger.info(`Extract requested for channel ${msg.channel_idx}`);
+        channels[msg.channel_idx].extract_requested = true;
       }
     });
 
-    io.mq.onTopic('transcript.command.extract_pitchtone', msg => {
-      if (msg.channel_idx) {
-        logger.info(`Extract requested for channel ${msg.channel_idx}`);
-        channels[msg.channel_idx].extract_requested = true;
+    io.mq.onTopic('transcript.command.tag_channel', msg => {
+      if (msg.channel_idx && msg.speaker && channels[msg.channel_idx]) {
+        logger.info(`Tagging channel ${msg.channel_idx}: ${msg.speaker}`);
+        channels[msg.channel_idx].speaker = msg.speaker;
       }
     });
   }
@@ -334,6 +327,9 @@ function stopTranscriptWorker() {
     if (channel.process) {
       channel.process.kill();
       channel.process = null;
+    }
+    if (channel.stt_stream) {
+      channel.stt_stream.destroy();
     }
     channel.stream = null;
     channel.raw_buffer = null;

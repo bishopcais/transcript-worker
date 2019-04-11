@@ -19,11 +19,7 @@ For Mac and Linux, you can also just use **default**, and choose the device from
 If you wish to utilize RabbitMQ for the worker, you must specify the following:
 ```json
 {
-  "mq": {
-    "url": "",
-    "username": "",
-    "password": ""
-  }
+  "mq": true
 }
 ```
 If this is not specified, the transcript worker, will just write each incoming transcription to
@@ -92,41 +88,17 @@ channel with the above default settings.
 #### Misc
 ```json
 {
-  "record": {
-    "enabled": false,
-    "file": "recording.txt"
-  },
   "buffer_size": 1000,
   "speaker_id_duration": 30000
 }
 ```
-The `record` is to specify a place to write out all received transcript messages to a single file,
-with one transcription per line. You can set a file to write to as well as whether or not to record.
-
 The `buffer_size` specifies how big of a stored buffer each channel will have for the incoming sound
 from ffmpeg, allowing one to fetch this for later analysis as requested.
 
-The `speaker_id_duration` is how long should a channel save a speaker id once specified.
+The `speaker_id_duration` is how long should a channel save a speaker id once specified. If set to
+`false`, then speaker ids will never be removed.
 
 Note: Leaving these out will use the above default values.
-
-
-The messages are published to RabbitMQ with the topic keys channelType.interim.transcript and channelType.final.transcript.
-The "interim" channel only contains intermediate results while the "final" channel only has the full sentence results.
-You can use CELIO's transcript object to subscribe to these topics.
-
-The messages are javascript objects with the following format:
-```javascript
-{
-  worker_id: io.config.get('id') || 'transcript-worker',
-  message_id: io.generateUUID(),
-  channel_idx: idx,
-  speaker: channel.speaker,
-  transcript: transcript.transcript,
-  total_time: total_time,
-  result: result
-}
-```
 
 ## RabbitMQ
 Assuming you've configured the worker to use RabbitMQ as specified above, the worker
@@ -142,7 +114,7 @@ to figure out what was said. This is useful for UI elements to show the user tha
 the system is listening to them. The second topic is the final transcription
 returned by the service and should be taken as what the user said to the system.
 
-with the following message structure:
+Both of these topics have the following message structure:
 ```json
 {
   "worker_id": "transcript-worker",
@@ -178,24 +150,19 @@ with the following message structure:
 
 ### Receiving
 
-The transcript-worker listens to the `transcript.command` topic and expects the following
-base structure:
-```json
-{
-  "command": "string"
-}
-```
-Where `command` can be one of the following:
-* switch_language
-* identify_speaker
-* extract_pitchtone
-* pause
-* unpause
-* stop_publish
-* start_publish
+The transcript worker listens for a range of commands to change how it's operating
+or to request some sort of data on the next input. These commands are:
+* transcript.command.switch_language
+* transcript.command.pause
+* transcript.command.unpause
+* transcript.command.extract_pitchtone
+* transcript.command.tag_channel
+* transcript.command.start_publish
+* transcript.command.stop_publish
 
-The first five commands also accept a `channel_idx` parameter to specify a specific channel
-to operate on, else it will run the command on all channels.
+The first three commands accept a `channel_idx` parameter to specify a specific channel
+to operate on, else it will run the command on all channels. The middle two commands
+(`extract_pitchtone` and `tag_channel`) require a `channel_idx` parameter.
 
-`switch_language` accepts a `language` parameter.
-`identify_speaker` accepts a `speaker` parameter.
+`switch_language` requires a `language` parameter.
+`tag_channel` requires a `speaker` parameter.

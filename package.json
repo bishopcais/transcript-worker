@@ -18,7 +18,7 @@
   "private": true,
   "dependencies": {
     "@cisl/binary-ring-buffer": "^1.0.0",
-    "@cisl/cais-express": "^1.2.0",
+    "@cisl/cais-express": "^1.2.1",
     "@cisl/celio": "^3.0.1",
     "@cisl/logger": "^1.1.0",
     "ibm-watson": "^4.0.1",

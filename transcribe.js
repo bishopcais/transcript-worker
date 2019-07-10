@@ -2,7 +2,7 @@ const spawn = require('child_process').spawn;
 const stream = require('stream');
 const wav = require('wav');
 
-const app = require('@cisl/cais-express');
+const app = require('@cisl/express');
 const BinaryRingBuffer = require('@cisl/binary-ring-buffer');
 const io = require('@cisl/celio');
 const logger = require('@cisl/logger');
@@ -120,7 +120,7 @@ function transcribeChannel(watson_stt, idx, channel) {
       let speaker_duration = io.config.get('speaker_id_duration');
 
       if (speaker_duration !== false &&
-          channel.speaker && speaker_duration > 0 && 
+          channel.speaker && speaker_duration > 0 &&
           (new Date() - channel.last_message_timestamp) > speaker_duration) {
         logger.info(`Clear tag for channel ${idx} (${channel.speaker}).`);
         channel.speaker = undefined;

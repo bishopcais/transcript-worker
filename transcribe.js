@@ -367,4 +367,20 @@ app.get('/', (req, res) => {
   });
 });
 
+app.use(app.express.static('statics'));
+
+app.post("/change_config",(req,res)=>{
+  let cfg=req.body;
+  for(let i=0;i<channels.length;i++){
+    let channel=channels[i];
+    if(channel.idx==cfg.idx){
+      channel.model=cfg.model;
+      channel.paused=cfg.paused=="true";
+      channel.lang=cfg.lang;
+      channel.speaker=cfg.speaker;
+      logger.info(`config idx:${channel.idx} model:${channel.model} paused:${channel.paused} lang:${channel.lang} speaker:${channel.speaker}`);
+    }
+  }
+});
+
 app.listen();

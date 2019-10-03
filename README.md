@@ -1,8 +1,19 @@
 # Transcript-Worker
 
-## Requirements
-You must have **ffmpeg** installed.
-On a mac, you can use `brew install ffmpeg --with-opus --with-ffplay`.
+## Installation
+You will need to install [ffmpeg](https://www.ffmpeg.org/) for the transcript-worker to function.
+This handles getting input across many different channels as well as deal with setting sound thresholds
+and such. To get it, for macOS you should use [homebrew](https://brew.sh) and for Linux use your distro's
+package manager. Alternatively for those platforms, and for Windows generally, you can directly
+[download](https://www.ffmpeg.org/download.html) the necessary binaries and put them somewhere on your path.
+
+## Usage
+```
+node transcribe.js
+```
+
+You can go to http://localhost:4545 to view a web UI that allows you to on-the-fly configure channels
+and view their current status.
 
 ## Configuration
 To run this worker, you will need a cog.json file to handle its configuration.
@@ -24,7 +35,7 @@ If you wish to utilize RabbitMQ for the worker, you must specify the following:
 ```
 If this is not specified, the transcript worker, will just write each incoming transcription to
 the console, and nothing else. Refer to documentation for
-[CelIO](https://internal.cisl.rpi/code/libraries/celio) for further configuration details. See
+[@cisl/io](https://internal.cisl.rpi.edu/code/libraries/node/cisl/io) for further configuration details. See
 below for the RabbitMQ topics and payloads for this worker.
 
 ### STT Credentials
@@ -148,7 +159,6 @@ Both of these topics have the following message structure:
   }
 }
 ```
-
 
 ### Receiving
 

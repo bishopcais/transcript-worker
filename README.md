@@ -189,8 +189,10 @@ to operate on, else it will run the command on all channels. The middle two comm
 
 This application does not directly interact with the [Learning Assistant](https://internal.cisl.rpi.edu/la/),
 but rather exposes a binary buffer along the `transcript.pitchtone.audio` topic (after extraction
-was requested for a channel using `transcript.command.extract_pitchtone`). Below is an example of
-code that can be used to interface with the transcript-worker and Learning Assistant:
+was requested for a channel using `transcript.command.extract_pitchtone`). After requesting an extraction, the
+next spoken word/phrase that is transcribed will be sent, regardless of the usage of a wake-up word or otherwise.
+
+Below is an example of code that can be used to interface with the transcript-worker and Learning Assistant:
 ```javascript
 const io = require('@cisl/io');
 const wav = require('wav');

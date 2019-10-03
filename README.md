@@ -184,3 +184,64 @@ to operate on, else it will run the command on all channels. The middle two comm
 
 `switch_language` requires a `language` parameter.
 `tag_channel` requires a `speaker` parameter.
+
+### Integration with Learning Assistant
+
+This application does not directly interact with the [Learning Assistant](https://internal.cisl.rpi.edu/la/),
+but rather exposes a binary buffer along the `transcript.pitchtone.audio` topic (after extraction
+was requested for a channel using `transcript.command.extract_pitchtone`). Below is an example of
+code that can be used to interface with the transcript-worker and Learning Assistant:
+```javascript
+const io = require('@cisl/io');
+const wav = require('wav');
+const fs = require('fs');
+const fetch = require('node-fetch');
+const FormData = require('form-data');
+
+io.rabbit.onTopic('transcript.pitchtone.audio', (response) => {
+  const file_name = `output-${io.generateUuid()}.wav`;
+  var save_wav = new wav.FileWriter(file_name, {
+    channels: 1,
+    sampleRate: 16000,
+    bitDepth: 16
+  });
+
+  save_wav.on('finish', () => {
+    const form = new FormData();
+    form.append('format', 'json');
+    form.append('sample_rate', '16000');
+    form.append('file', fs.createReadStream(file_name));
+    form.append('word', '校内');
+
+    fetch('https://internal.cisl.rpi.edu/la/upload', {
+      method: 'POST',
+      body: form
+    })
+      .then(res => res.json())
+      .then(json => {
+        fs.unlinkSync(file_name);
+        console.log(json)
+      });
+  });
+
+  save_wav.write(response.content);
+  save_wav.end();
+});
+
+io.rabbit.publishTopic('transcript.command.extract_pitchtone', {channel_idx: 0});
+```
+
+where the output to the console will be:
+```json
+{
+  "filename": "<file_name>"
+}
+```
+
+which corresponds to `https://internal.cisl.rpi.edu/la/renders/<file_name>`, for example:
+```json
+{
+  "filename": "1570115937_855945.webm"
+}
+```
+corresponds to https://internal.cisl.rpi.edu/la/renders/1570115937_855945.webm.

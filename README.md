@@ -7,6 +7,12 @@ and such. To get it, for macOS you should use [homebrew](https://brew.sh) and fo
 package manager. Alternatively for those platforms, and for Windows generally, you can directly
 [download](https://www.ffmpeg.org/download.html) the necessary binaries and put them somewhere on your path.
 
+Then, you need to get the [STT Credentials](#STT_Credentials) and then do:
+```
+npm install
+cp cog-sample.json cog.json
+```
+
 ## Usage
 ```
 node transcribe.js

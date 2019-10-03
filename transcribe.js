@@ -1,6 +1,5 @@
 const spawn = require('child_process').spawn;
 const stream = require('stream');
-const wav = require('wav');
 
 const express = require('@cisl/express');
 const BinaryRingBuffer = require('@cisl/binary-ring-buffer');
@@ -22,7 +21,7 @@ const config = Object.assign(
     default_language: 'en-US',
     default_model: 'broad',
     sample_rate: 16000,
-    buffer_size: 1000,
+    buffer_size: 512000,
     speaker_id_duration: 5 * 6000
   },
   io.config.transcribe
@@ -126,6 +125,7 @@ function publishTranscript(idx, channel, data) {
     }
 
     if (result.final) {
+      logger.info(`Transcript (Channel ${msg.channel_idx}): ${msg.transcript}`);
       if (channel.extract_requested && io.mq) {
         channel.extract_requested = false;
         let start_time = transcript.timestamps[0][1];
@@ -133,16 +133,9 @@ function publishTranscript(idx, channel, data) {
 
         let start_index = (config.sample_rate * 2 * start_time);
         let end_index = (config.sample_rate * 2 * end_time);
-
-        // extract audio bytes with given start and end indexes
-        let writer = new wav.Writer({'sampleRate': config.sample_rate, 'channels': 1});
-        writer.write(channel.raw_buffer.slice(start_index, end_index), () => {
-          // after data has been extracted publish to rabbitmq..
-          console.log(`Extracted ${msg.transcript} for analysis`);
-          io.mq.publishTopic('transcript.pitchtone.audio', writer.read());
-        });
+        logger.info(`  > Extracted for analysis`);
+        io.mq.publishTopic('transcript.pitchtone.audio', channel.raw_buffer.slice(start_index, end_index));
       }
-      logger.info(`Transcript (Channel ${msg.channel_idx}): ${msg.transcript}`);
       logger.debug(`Transcript (Channel ${msg.channel_idx}): ${JSON.stringify(msg, null, 2)}`);
       app.wsServer.clients.forEach((client) => {
         client.send(JSON.stringify({
@@ -233,7 +226,7 @@ async function startTranscriptWorker() {
         '-f', device_info.interface,
         '-i', device_info.device,
         '-map_channel', `0.0.${channel.idx}`,
-        '-acodec', 'pcm_s16le', '-ar', config.sample_rate,
+        '-acodec', 'pcm_s16le', '-ar', `${config.sample_rate}`,
         '-f', 'wav', '-'
       ];
 

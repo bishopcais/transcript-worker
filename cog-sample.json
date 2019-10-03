@@ -23,6 +23,6 @@
   "channels": [
     {}
   ],
-  "buffer_size": 1000,
+  "buffer_size": 512000,
   "speaker_id_duration": 30000
 }

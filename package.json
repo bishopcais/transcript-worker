@@ -14,8 +14,7 @@
     "@cisl/io": "^1.0.0-dev7",
     "@cisl/logger": "^1.2.0",
     "@fortawesome/fontawesome-free": "^5.11.2",
-    "ibm-watson": "^5.0.0-rc2",
-    "wav": "^1.0.2"
+    "ibm-watson": "^5.0.0-rc2"
   },
   "devDependencies": {
     "eslint": "^6.5.1"

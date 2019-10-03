@@ -115,6 +115,7 @@ function publishTranscript(idx, channel, data) {
       timestamp: channel.last_message_timestamp,
       channel_idx: idx,
       speaker: channel.speaker,
+      language: channel.language,
       transcript: transcript.transcript,
       total_time: total_time,
       result: result

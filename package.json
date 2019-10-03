@@ -3,16 +3,21 @@
   "version": "3.0.0",
   "main": "transcribe.js",
   "scripts": {
-    "start": "node transcribe.js"
+    "start": "node transcribe.js",
+    "lint": "eslint ."
   },
   "author": "Matthew Peveler <pevelm@rpi.edu>",
   "private": true,
   "dependencies": {
-    "@cisl/binary-ring-buffer": "^1.0.0",
+    "@cisl/binary-ring-buffer": "^1.2.1",
     "@cisl/express": "^1.0.0",
-    "@cisl/io": "^1.0.0-dev5",
+    "@cisl/io": "^1.0.0-dev7",
     "@cisl/logger": "^1.2.0",
+    "@fortawesome/fontawesome-free": "^5.11.2",
     "ibm-watson": "^5.0.0-rc2",
     "wav": "^1.0.2"
+  },
+  "devDependencies": {
+    "eslint": "^6.5.1"
   }
 }

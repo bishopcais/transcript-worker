@@ -1,0 +1,35 @@
+body {
+  user-select:none;
+  font-family:Arial;
+  font-size: 15px;
+}
+
+#root {
+  display: flex;
+  padding: 30px;
+}
+
+.channel {
+  margin-right: 50px;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.channel-info {
+  display: table;
+  border-spacing: 5px;
+}
+
+.channel-info-row {
+  display: table-row;
+}
+
+.channel-info-column {
+  display: table-cell;
+}
+
+input{border:1px solid grey}
+select{border:1px solid grey}

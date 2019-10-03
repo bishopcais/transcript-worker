@@ -2,59 +2,54 @@ const spawn = require('child_process').spawn;
 const stream = require('stream');
 const wav = require('wav');
 
-const app = require('@cisl/express');
+const express = require('@cisl/express');
 const BinaryRingBuffer = require('@cisl/binary-ring-buffer');
-const io = require('@cisl/celio');
+const io = require('@cisl/io');
 const logger = require('@cisl/logger');
-
 const SpeechToTextV1 = require('ibm-watson/speech-to-text/v1');
+
+const app = express();
 
 let publish = true;
 
-io.config.required(['STT:username', 'STT:password']);
-io.config.defaults({
-  channels: [
-    {} // Create a channel that uses all defaults
-  ],
-  customizations: {
-    acoustic: {
-    },
-    language: {
-    }
+const config = Object.assign(
+  {
+    channels: [
+      {} // Create a channel that uses all defaults
+    ],
+    default_driver: 'ffmpeg',
+    default_device: 'default',
+    default_language: 'en-US',
+    default_model: 'broad',
+    sample_rate: 16000,
+    buffer_size: 1000,
+    speaker_id_duration: 5 * 6000
   },
-  default_device: 'default',
-  default_language: 'en-US',
-  default_model: 'broad',
-  default_acoustic_customization: {
-    'en-US': null
-  },
-  default_language_customization: {
-    'en-US': null
-  },
-  sample_rate: 16000,
-  buffer_size: 1000,
-  speaker_id_duration: 5 * 6000
-});
+  io.config.transcribe
+);
 
-let channels = io.config.get('channels');
+let channels = config.channels
+let languages = [];
 
-if (!io.mq) {
+if (!io.rabbit) {
   logger.warn('Only printing to console, could not find RabbitMQ.');
 }
 
-if (!(['broad', 'narrow'].includes(io.config.get('default_model')))) {
-  logger.error(`Unsupported model (broad or narrow): ${io.config.get('default_model')}`);
+if (!(['broad', 'narrow'].includes(config.default_model))) {
+  logger.error(`Unsupported model (broad or narrow): ${config.default_model}`);
   process.exit();
 }
 
-function getLanguageModels(watson_stt) {
+const watson_stt = new SpeechToTextV1({});
+
+function getLanguageModels() {
   return new Promise((resolve, reject) => {
-    watson_stt.listModels(null, (err, models) => {
+    watson_stt.listModels(null, (err, res) => {
       if (err) {
         reject(err);
       }
       else {
-        resolve(models.models);
+        resolve(res.result.models);
       }
     });
   });
@@ -91,108 +86,133 @@ function last(array) {
   return length ? array[length - 1] : undefined;
 }
 
-function transcribeChannel(watson_stt, idx, channel) {
+function resetSpeaker(idx) {
+  channels[idx].speaker = undefined;
+  notifyClientsChannel(channels[idx]);
+}
+
+function publishTranscript(idx, channel, data) {
+  if (data.results && data.results[0] && data.results[0].alternatives && publish && !channel.paused) {
+    let result = data.results[0];
+    let transcript = result.alternatives[0];
+    transcript.transcript = transcript.transcript.trim();
+    let total_time = 0;
+    if (transcript.timestamps) {
+      total_time = Math.round((last(last(transcript.timestamps)) - transcript.timestamps[0][1]) * 100) / 100;
+    }
+
+    if (channel.speaker) {
+      if (channel.speaker_timeout) {
+        clearTimeout(channel.speaker_timeout);
+      }
+      channel.speaker_timeout = setTimeout(() => resetSpeaker(idx), config.speaker_id_duration);
+    }
+
+    channel.last_message_timestamp = new Date();
+
+    let msg = {
+      worker_id: config.id || 'transcript-worker',
+      message_id: io.generateUuid(),
+      timestamp: channel.last_message_timestamp,
+      channel_idx: idx,
+      speaker: channel.speaker,
+      transcript: transcript.transcript,
+      total_time: total_time,
+      result: result
+    };
+
+    if (io.mq) {
+      io.mq.publishTopic(`transcript.result.${result.final ? 'final' : 'interim'}`, JSON.stringify(msg));
+    }
+
+    if (result.final) {
+      if (channel.extract_requested && io.mq) {
+        channel.extract_requested = false;
+        let start_time = transcript.timestamps[0][1];
+        let end_time = last(last(transcript.timestamps));
+
+        let start_index = (config.sample_rate * 2 * start_time);
+        let end_index = (config.sample_rate * 2 * end_time);
+
+        // extract audio bytes with given start and end indexes
+        let writer = new wav.Writer({'sampleRate': config.sample_rate, 'channels': 1});
+        writer.write(channel.raw_buffer.slice(start_index, end_index), () => {
+          // after data has been extracted publish to rabbitmq..
+          console.log(`Extracted ${msg.transcript} for analysis`);
+          io.mq.publishTopic('transcript.pitchtone.audio', writer.read());
+        });
+      }
+      logger.info(`Transcript (Channel ${msg.channel_idx}): ${msg.transcript}`);
+      logger.debug(`Transcript (Channel ${msg.channel_idx}): ${JSON.stringify(msg, null, 2)}`);
+      app.wsServer.clients.forEach((client) => {
+        client.send(JSON.stringify({
+          type: 'transcript',
+          data: {
+            idx: msg.channel_idx,
+            transcript: msg.transcript, timestamp: msg.timestamp.toLocaleTimeString(undefined, {hourCycle:'h24'})
+          }
+        }));
+      });
+    }
+  }
+}
+
+function notifyClientsChannel(channel) {
+  app.wsServer.clients.forEach((client) => {
+    client.send(JSON.stringify({type: 'channel', data: channel}));
+  });
+}
+
+function transcribeChannel(idx, channel) {
+  if (channel.driver === 'fake') {
+    return;
+  }
   if (channel.stt_stream) {
     channel.stt_stream.destroy();
   }
   let params = {
     objectMode: true,
     model: getModelName(channel.language, channel.model),
-    content_type: `audio/l16; rate=${io.config.get('sample_rate')}; channels=1`,
-    inactivity_timeout: -1,
+    contentType: `audio/l16; rate=${config.sample_rate}; channels=1`,
+    inactivityTimeout: -1,
     timestamps: true,
-    smart_formatting: true,
-    interim_results: true
+    smartFormatting: true,
+    interimResults: true
   };
 
   channel.stt_stream = watson_stt.recognizeUsingWebSocket(params);
   channel.stream.pipe(channel.stt_stream);
   channel.stt_stream.on('data', (data) => {
-    if (data.results && data.results[0] && data.results[0].alternatives && publish && !channel.paused) {
-      let result = data.results[0];
-      let transcript = result.alternatives[0];
-      transcript.transcript = transcript.transcript.trim();
-      let total_time = 0;
-      if (transcript.timestamps) {
-        total_time = Math.round((last(last(transcript.timestamps)) - transcript.timestamps[0][1]) * 100) / 100;
-      }
-
-      let speaker_duration = io.config.get('speaker_id_duration');
-
-      if (speaker_duration !== false &&
-          channel.speaker && speaker_duration > 0 &&
-          (new Date() - channel.last_message_timestamp) > speaker_duration) {
-        logger.info(`Clear tag for channel ${idx} (${channel.speaker}).`);
-        channel.speaker = undefined;
-      }
-
-
-      channel.last_message_timestamp = new Date();
-
-      let msg = {
-        worker_id: io.config.get('id') || 'transcript-worker',
-        message_id: io.generateUUID(),
-        timestamp: channel.last_message_timestamp,
-        channel_idx: idx,
-        speaker: channel.speaker,
-        transcript: transcript.transcript,
-        total_time: total_time,
-        result: result
-      };
-
-      if (channel.extract_requested && io.mq) {
-        channel.extract_requested = false;
-        let start_time = transcript.timestamps[0][1];
-        let end_time = last(last(transcript.timestamps));
-
-        let start_index = (io.config.get('sample_rate') * 2 * start_time);
-        let end_index = (io.config.get('sample_rate') * 2 * end_time);
-
-        // extract audio bytes with given start and end indexes
-        let writer = new wav.Writer({'sampleRate': io.config.get('sample_rate'), 'channels': 1});
-        writer.write(channel.raw_buffer.slice(start_index, end_index), () => {
-          // after data has been extracted publish to rabbitmq..
-          console.log(`Extracted ${msg.transcript} for analysis`);
-          io.publishTopic('transcript.pitchtone.audio', writer.read());
-        });
-      }
-
-      if (result.final) {
-        logger.info(`Transcript (Channel ${msg.channel_idx}): ${msg.transcript}`);
-        logger.debug(`Transcript (Channel ${msg.channel_idx}): ${JSON.stringify(msg, null, 2)}`);
-      }
-
-      if (io.mq) {
-        io.mq.publishTopic(`transcript.result.${result.final ? 'final' : 'interim'}`, JSON.stringify(msg));
-      }
-    }
+    publishTranscript(idx, channel, data);
   });
 }
 
 async function startTranscriptWorker() {
-  const watson_stt = new SpeechToTextV1(io.config.get('STT'));
-
   let models = await getLanguageModels(watson_stt);
   let model_names = [];
-  let languages = [];
+  languages = [];
   for (let model of models) {
     if (!(languages.includes(model.language))) {
       languages.push(model.language);
     }
     model_names.push(model.name);
   }
+  languages.sort();
 
   logger.info(`Starting ${channels.length} channel(s):`);
   for (let idx = 0; idx < channels.length; idx++) {
     let channel = channels[idx];
+    channel.transcript = [];
+
     channel.idx = channel.idx || idx;
-    channel.device = channel.device || io.config.get('default_device');
-    channel.language = channel.language || io.config.get('default_language');
+    channel.driver = channel.driver || config.default_driver;
+    channel.device = channel.device || config.default_device;
+    channel.language = channel.language || config.default_language;
     if (!(languages.includes(channel.language))) {
       logger.error(`Invalid language for channel ${idx}: ${channel.language}`);
       return;
     }
-    channel.model = channel.model || io.config.get('default_model');
+    channel.model = channel.model || config.default_model;
     let model_full = getModelName(channel.language, channel.model);
     if (!model_names.includes(model_full)) {
       logger.error(`Invalid model for channel ${idx}: ${channel.model} (${model_full})`);
@@ -202,20 +222,18 @@ async function startTranscriptWorker() {
     channel.paused = false;
     channel.last_message_timestamp = null;
     channel.speaker = undefined;
+    channel.speaker_timeout = null;
     channel.extract_requested = false;
-    channel.raw_buffer = new BinaryRingBuffer(io.config.get('buffer_size'));
+    channel.raw_buffer = new BinaryRingBuffer(config.buffer_size);
 
-    if (channel.device === 'ipc') {
-
-    }
-    else {
+    if (channel.driver === 'ffmpeg')  {
       let device_info = getDeviceInfo(channel.device);
       let args = [
         '-v', 'error',
         '-f', device_info.interface,
         '-i', device_info.device,
         '-map_channel', `0.0.${channel.idx}`,
-        '-acodec', 'pcm_s16le', '-ar', io.config.get('sample_rate'),
+        '-acodec', 'pcm_s16le', '-ar', config.sample_rate,
         '-f', 'wav', '-'
       ];
 
@@ -241,90 +259,99 @@ async function startTranscriptWorker() {
 
       channel.stream = channel.stream.pipe(pausable);
     }
-    logger.info(`  ${idx}: ${channel.language} - ${channel.model} - ${channel.device}`);
+    logger.info(`  ${idx}: ${channel.language} - ${channel.model} - ${channel.driver} - ${channel.device}`);
   }
 
-  if (io.mq) {
-    io.mq.onTopic('transcript.command.switch_language', msg => {
-      logger.info(`Switching languages for ${(!msg.channel_idx || isNaN(parseInt(msg.channel_idx))) ? 'all' : msg.channel_idx} to ${msg.language}`);
-      if (!msg.channel_idx || isNaN(parseInt(msg.channel_idx))) {
+  if (io.rabbit) {
+    io.rabbit.onTopic('transcript.command.switch_language', msg => {
+      logger.info(`Switching languages for ${(!msg.content.channel_idx || isNaN(parseInt(msg.content.channel_idx))) ? 'all' : msg.content.channel_idx} to ${msg.content.language}`);
+      if (!msg.content.channel_idx || isNaN(parseInt(msg.content.channel_idx))) {
         for (let idx = 0; idx < channels.length; idx++) {
-          if (!model_names.includes(getModelName(msg.language, channels[idx].model))) {
-            logger.warn(`Invalid model for channel ${msg.channel_idx}: ${getModelName(msg.language, channels[idx].model)}`);
+          if (!model_names.includes(getModelName(msg.content.language, channels[idx].model))) {
+            logger.warn(`Invalid model for channel ${msg.content.channel_idx}: ${getModelName(msg.content.language, channels[idx].model)}`);
             continue;
           }
-          channels[idx].language = msg.language;
-          transcribeChannel(watson_stt, idx, channels[idx]);
+          channels[idx].language = msg.content.language;
+          notifyClientsChannel(channels[idx]);
+          transcribeChannel(idx, channels[idx]);
         }
       }
-      else if (!isNaN(parseInt(msg.channel_idx))) {
-        if (!model_names.includes(getModelName(msg.language, channels[msg.channel_idx].model))) {
-          logger.warn(`Invalid model for channel ${msg.channel_idx}: ${getModelName(msg.language, channels[msg.channel_idx].model)}`);
+      else if (!isNaN(parseInt(msg.content.channel_idx))) {
+        const idx = parseInt(msg.content.channel_idx);
+        if (!model_names.includes(getModelName(msg.content.language, channels[idx].model))) {
+          logger.warn(`Invalid model for channel ${idx}: ${getModelName(msg.content.language, channels[idx].model)}`);
         }
         else {
-          transcribeChannel(watson_stt, parseInt(msg.channel_idx), channels[parseInt(msg.channel_idx)]);
+          channels[idx].language = msg.content.language
+          notifyClientsChannel(channels[idx]);
+          transcribeChannel(idx, channels[idx]);
         }
       }
     });
 
-    io.mq.onTopic('transcript.command.pause', msg => {
-      logger.info(`Pausing channel ${(!msg.channel_idx || isNaN(parseInt(msg.channel_idx))) ? 'all' : msg.channel_idx}`);
-      if (!msg.channel_idx || isNaN(parseInt(msg.channel_idx))) {
+    io.rabbit.onTopic('transcript.command.pause', msg => {
+      logger.info(`Pausing channel ${(!msg.content.channel_idx || isNaN(parseInt(msg.content.channel_idx))) ? 'all' : msg.content.channel_idx}`);
+      if (!msg.content.channel_idx || isNaN(parseInt(msg.content.channel_idx))) {
         for (let idx = 0; idx < channels.length; idx++) {
           channels[idx].paused = true;
+          notifyClientsChannel(channels[idx]);
         }
       }
-      else if (!isNaN(parseInt(msg.channel_idx))) {
-        channels[parseInt(msg.channel_idx)] = true;
+      else if (!isNaN(parseInt(msg.content.channel_idx))) {
+        channels[parseInt(msg.content.channel_idx)].paused = true;
+        notifyClientsChannel(channels[parseInt(msg.content.channel_idx)]);
       }
     });
 
-    io.mq.onTopic('transcript.command.unpause', msg => {
-      logger.info(`Unpausing channel ${(!msg.channel_idx || isNaN(parseInt(msg.channel_idx))) ? 'all' : msg.channel_idx}`);
-      if (!msg.channel_idx || isNaN(parseInt(msg.channel_idx))) {
+    io.rabbit.onTopic('transcript.command.unpause', msg => {
+      logger.info(`Unpausing channel ${(!msg.content.channel_idx || isNaN(parseInt(msg.content.channel_idx))) ? 'all' : msg.content.channel_idx}`);
+      if (!msg.content.channel_idx || isNaN(parseInt(msg.content.channel_idx))) {
         for (let idx = 0; idx < channels.length; idx++) {
           channels[idx].paused = false;
+          notifyClientsChannel(channels[idx]);
         }
       }
-      else if (!isNaN(parseInt(msg.channel_idx))) {
-        channels[parseInt(msg.channel_idx)] = false;
+      else if (!isNaN(parseInt(msg.content.channel_idx))) {
+        channels[parseInt(msg.content.channel_idx)].pause = false;
+        notifyClientsChannel(channels[parseInt(msg.content.channel_idx)]);
       }
     });
 
-    io.mq.onTopic('transcript.command.stop_publish', msg => {
+    io.rabbit.onTopic('transcript.command.stop_publish', () => {
       logger.info('Stopping publishing');
       publish = false;
     });
 
-    io.mq.onTopic('transcript.command.start_publish', msg => {
+    io.rabbit.onTopic('transcript.command.start_publish', () => {
       logger.info('Starting publishing');
       publish = true;
     });
 
-    io.mq.onTopic('transcript.command.extract_pitchtone', msg => {
-      if (msg.channel_idx && channels[msg.channel_idx]) {
-        logger.info(`Extract requested for channel ${msg.channel_idx}`);
-        channels[msg.channel_idx].extract_requested = true;
+    io.rabbit.onTopic('transcript.command.extract_pitchtone', msg => {
+      let idx = msg.content.channel_idx;
+      if (channels[idx]) {
+        logger.info(`Extract requested for channel ${idx}`);
+        channels[idx].extract_requested = true;
       }
     });
 
-    io.mq.onTopic('transcript.command.tag_channel', msg => {
-      if (msg.channel_idx && msg.speaker && channels[msg.channel_idx]) {
-        logger.info(`Tagging channel ${msg.channel_idx}: ${msg.speaker}`);
-        channels[msg.channel_idx].speaker = msg.speaker;
+    io.rabbit.onTopic('transcript.command.tag_channel', msg => {
+      if (msg.content.channel_idx && msg.content.speaker && channels[msg.content.channel_idx]) {
+        logger.info(`Tagging channel ${msg.content.channel_idx}: ${msg.content.speaker}`);
+        channels[msg.content.channel_idx].speaker = msg.content.speaker;
       }
     });
   }
 
-  logger.info(`Starting transcription`);
+  logger.info(`Starting to transcribe...`);
   for (let idx = 0; idx < channels.length; idx++) {
-    transcribeChannel(watson_stt, idx, channels[idx]);
+    transcribeChannel(idx, channels[idx]);
   }
 }
 
 function stopTranscriptWorker() {
   logger.info('Stopping all channels.');
-  for (let channel of io.config.get('channels')) {
+  for (let channel of config.channels) {
     if (channel.process) {
       channel.process.kill();
       channel.process = null;
@@ -349,6 +376,24 @@ function exitHandler(options, err) {
   }
 }
 
+function get_channel(channel) {
+  const disallowed_keys = ['raw_buffer', 'process', 'stream', 'stt_stream', 'socket', 'speaker_timeout'];
+  return Object.keys(channel)
+    .filter(key => !disallowed_keys.includes(key))
+    .reduce((obj, key) => {
+      obj[key] = channel[key];
+      return obj;
+    }, {});
+}
+
+function get_channels() {
+  let filtered_channels = [];
+  for (const channel of channels) {
+    filtered_channels.push(get_channel(channel));
+  }
+  return filtered_channels;
+}
+
 // do something when app is closing
 process.on('exit', exitHandler.bind(null, { cleanup: true }));
 
@@ -367,18 +412,52 @@ app.get('/', (req, res) => {
   });
 });
 
-app.use(app.express.static('statics'));
+app.use(express.static('static'));
 
-app.post("/change_config",(req,res)=>{
-  let cfg=req.body;
-  for(let i=0;i<channels.length;i++){
-    let channel=channels[i];
-    if(channel.idx==cfg.idx){
-      channel.model=cfg.model;
-      channel.paused=cfg.paused=="true";
-      channel.lang=cfg.lang;
-      channel.speaker=cfg.speaker;
-      logger.info(`config idx:${channel.idx} model:${channel.model} paused:${channel.paused} lang:${channel.lang} speaker:${channel.speaker}`);
+app.wsServer.on('connection', (socket) => {
+  socket.onmessage = (event) => {
+    let msg;
+    try {
+      msg = JSON.parse(event.data);
+    }
+    catch (ex) {
+      socket.send(JSON.stringify({type: 'error', message: `Invalid JSON object sent: ${ex}`}));
+      return;
+    }
+
+    if (msg.type === 'get_channels') {
+      socket.send(JSON.stringify({
+        type: 'channels',
+        data: get_channels()
+      }));
+    }
+    else if (msg.type === 'get_languages') {
+      socket.send(JSON.stringify({
+        type: 'languages',
+        data: languages
+      }));
+    }
+    else if (msg.type === 'save_channel') {
+      channels[msg.data.idx] = msg.data;
+      app.wsServer.clients.forEach((client) => {
+        client.send(JSON.stringify({type: 'channel', data: get_channel(channels[msg.data.idx])}));
+      });
+    }
+    else if (msg.type === 'transcript') {
+      let data = {
+        results: [
+          {
+            alternatives: [
+              {
+                confidence: 1,
+                transcript: msg.data.transcript
+              }
+            ],
+            final: true
+          },
+        ]
+      };
+      publishTranscript(msg.data.idx, channels[msg.data.idx], data);
     }
   }
 });

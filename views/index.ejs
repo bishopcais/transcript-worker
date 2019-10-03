@@ -3,158 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <title>transcript-worker</title>
-    <style>
-        @font-face{
-            font-family: 'pause';
-            src : url('../pause.ttf');
-        }
-        body {
-            padding-top:50px;
-            user-select:none;
-            font-family:Arial;
-            font-size: 15px;
-        }
-        .rs{
-            cursor:pointer;
-            font-family: pause;
-        }
-        #save{
-            cursor:pointer;
-            border:1px solid;
-            width:40px;
-            height: 18px;
-            position: relative;
-            left:50%;
-            top:20px;
-            transform: translateX(-50%);
-            text-align: center;
-            line-height: 110%;
-            border-radius: 3px;
-        }
-        #ctn{
-            position: absolute;
-            border:3px solid grey;
-            border-radius: 10px;
-            height: 220px;
-            width: 600px;
-            transform: translate(-50%,-50%);
-            left:50%;
-            top:40%;
-            padding-top: 25px;
-            padding-left: 25px;
-        }
-        #title{
-            font-size:20px;
-            width: 100%;
-            text-align: center;
-        }
-        .c1{
-            width:200px;
-        }
-        input{border:1px solid grey}
-        select{border:1px solid grey}
-    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/fontawesome.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/solid.min.css" />
+
+    <link rel="stylesheet" href="style.css" type="text/css" />
+    <script src="https://unpkg.com/react@16/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@16/umd/react-dom.development.js" crossorigin></script>
+    <!-- For Development, replace with actual preprocessor for deploy -->
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+
+    <script type="text/babel" src="app.jsx"></script>
 </head>
-<script
-  src="https://code.jquery.com/jquery-3.4.1.min.js"
-  integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo="
-  crossorigin="anonymous"></script>
-<body class="container">
-<main>
-    <div id="ctn">
-        <div id="title">Channel <select id="idx">
-            <% channels.forEach((channel) => { %>
-                <option value="<%= channel.idx%>"><%= channel.idx%></option>
-            <% }); %>
-        </select></div>
-        <% channels.forEach((channel) => { %>
-            <table id=<%-"tb"+channel.idx%> class="channeltb">
-                <tr>
-                    <td class="c1">Index: </td><td class="c2"><%= channel.idx%></td>
-                </tr>
-                <tr>
-                    <td class="c1">Device:</td><td class="c2"><%= channel.device%></td>
-                </tr>
-                <tr>
-                    <td class="c1">Speaker</td><td class="c2"><input type="text" class="speaker"</tr>
-                <tr>
-                    <td class="c1">Language:</td><td class="c2"><input type="text" class="lang"></td>
-                </tr>
-                <tr>
-                    <td class="c1">Model:</td><td class="c2">
-                        <select class="model">
-                            <option>broad</option>
-                            <option>narrow</option>
-                        </select>
-                    </td>
-                </tr>
-                <tr>
-                    <td>Running Status:</td><td><span class="rs"></span></td>
-                </tr>
-            </table>
-            <script>
-                $("<%-`#tb${channel.idx} .model`%>").val("<%=channel.model%>");
-                $("<%-`#tb${channel.idx} .lang`%>").val("<%= channel.language%>");
-                <%if(!channel.paused){%>
-                    $("#tb<%=channel.idx%> .rs").html("a");
-                <%}else{%>
-                    $("#tb<%=channel.idx%> .rs").html("b");
-                <%}%>
-                <%if(channel.speaker===undefined){%>
-                    $("#tb<%=channel.idx%> .speaker").val("");
-                <%}else{%>
-                    $("#tb<%=channel.idx%> .speaker").val("<%=channel.speaker%>");
-                <%}%>
-            </script>
-        <% }); %>
-        
-        <div id="save">save</div>
-    </div>
-</main>
-<script>
-    $(".rs").on("click",function(){
-        if($(this).html()=="a"){
-            $(this).html("b");
-        }else{
-            $(this).html("a");
-        }
-    });
-    $("#save").hover(function(){
-        $(this).css({background:"rgb(200,200,200)"});
-    },function(){
-        $(this).css({background:""});
-    });
-    $("#save").mousedown(function(){
-        $(this).css({background:""});
-    });
-    $("#save").mouseup(function(){
-        $(this).css({background:"rgb(200,200,200)"});
-    });
-    $(".rs").hover(function(){
-        $(this).css({color:"blue"});
-    },function(){
-        $(this).css({color:""});
-    });
-    $(".channeltb").css({display:"none"});
-    
-    $("#tb"+$("#idx").val()).css({display:"inline"});
-    let idx=$("#idx").val();
-    $("#idx").change(function(){
-        $(".channeltb").css({display:"none"});
-        idx=$("#idx").val();
-        $("#tb"+$("#idx").val()).css({display:"inline"});
-    })
-    $("#save").click(function(){
-        let cfg={};
-        cfg.idx=idx;
-        cfg.model=$(`#tb${idx} .model`).val();
-        cfg.paused=$(`#tb${idx} .rs`).html()=="a"?false:true;
-        cfg.lang=$(`#tb${idx} .lang`).val();
-        cfg.speaker=$(`#tb${idx} .speaker`).val()==""?undefined:$(`#tb${idx} .speaker`).val();
-        console.log(cfg);
-        $.post("change_config",cfg);
-    });
-    
-</script>
+
+<body>
+<div id="root"></div>
 </body>
 </html>

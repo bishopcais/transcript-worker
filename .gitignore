@@ -8,3 +8,4 @@ recording.json
 recording.txt
 *.wav
 .DS_Store
+*.env

@@ -15,41 +15,39 @@ On Mac, use: `ffmpeg -list_devices true -f avfoundation -i dummy`.
 On Linux, use: `arecord -L`.
 For Mac and Linux, you can also just use **default**, and choose the device from the system dialog.
 
-#### RabbitMQ
+### RabbitMQ
 If you wish to utilize RabbitMQ for the worker, you must specify the following:
 ```json
 {
-  "mq": true
+  "rabbit": true
 }
 ```
 If this is not specified, the transcript worker, will just write each incoming transcription to
-the console, and nothing else. Refer to documentation for 
+the console, and nothing else. Refer to documentation for
 [CelIO](https://internal.cisl.rpi/code/libraries/celio) for further configuration details. See
 below for the RabbitMQ topics and payloads for this worker.
 
-#### STT Credentials
-You must input the credentials of 
-[Watson Speech-to-Text service](https://www.ibm.com/watson/services/speech-to-text/).
-Once you've gotten the API key (or username/password if using an older instance), you
-will need to add an "STT" section to the cog.json as follows:
-```json
-{
-  "STT": {
-    "username": "Your Watson STT username",
-    "password": "Your Password",
-    "version": "v1"
-  }
-}
-```
-Note: If using an API key, then the "username" field will just be `apikey`.
+### STT Credentials
+You must input the credentials of [Watson Speech-to-Text service](https://www.ibm.com/watson/services/speech-to-text/),
+utilizing the `ibm-credentials.env` file for the service. See
+[node-sdk#getting-credentials](https://github.com/watson-developer-cloud/node-sdk#getting-credentials)
+for details on how to get the file and details about it.
+
+### transcript-worker configuration
+Configuration for running the `transcript-worker` happens under the `transcribe` key in the
+`cog.json` file. Many of the values can be omitted, and will be instantiated with the defaults
+described below.
 
 #### Defaults
 Next, you will need to configure the default details of the service:
 ```json
 {
-  "default_device": "default",
-  "default_language": "en-US",
-  "default_model": "broad",
+  "transcribe": {
+    "default_driver": "ffmpeg",
+    "default_device": "default",
+    "default_language": "en-US",
+    "default_model": "broad",
+  }
 }
 ```
 This provides default settings for each channel you specify (see below). The device
@@ -58,42 +56,46 @@ ISO 3166-1 country code. The model should either be "broad" or "narrow". You can
 https://console.bluemix.net/docs/services/speech-to-text/models.html#models to see the
 full list of support languages and models.
 
+The `driver` can be either `ffmpeg` (to allow piping from `ffmpeg` onto that channel) or
+`fake` (only allow typing in inputs from web console).
+
 Note: Leaving these out of the configuration will use the values shown above.
 
 #### Channel Configuration
 Channel configuration is handled by a list of objects as shown below:
 ```json
 {
-  "channels": [
-    {
-      "idx": "0",
-      "device": "device name",
-      "language": "en-US",
-      "model": "broad"
-    },
-    {
-      "_comment": "use default settings"
-    }
-  ]
+  "transcribe": {
+      "channels": [
+      {
+        "device": "device name",
+        "language": "en-US",
+        "model": "broad"
+      },
+      {
+        "_comment": "use default settings",
+        "driver": "fake"
+      }
+    ]
+  }
 }
 ```
 The first channel has all values explicitly defined with the second channel
 using the defaults (see above). You can specify as many or as few of the properties
-for a channel as you want. The idx, if not defined, will be its idx in the list of
-channels.
+for a channel as you want.
 
 Note: If you don't include the "channels" key, then the system will default to one
-channel with the above default settings.
+channel with the default settings.
 
 #### Misc
 ```json
 {
-  "buffer_size": 1000,
+  "buffer_size": 512000,
   "speaker_id_duration": 30000
 }
 ```
-The `buffer_size` specifies how big of a stored buffer each channel will have for the incoming sound
-from ffmpeg, allowing one to fetch this for later analysis as requested.
+The `buffer_size` specifies how big of a stored buffer each channel will have for the incoming binary
+sound buffer from ffmpeg, allowing one to fetch this for later analysis as requested.
 
 The `speaker_id_duration` is how long should a channel save a speaker id once specified. If set to
 `false`, then speaker ids will never be removed.

@@ -8,21 +8,11 @@
   "description": "STT for applications",
   "tags": ["stt", "worker"],
   "log": "transcript-worker.log",
-  "mq": {
-    "url": "localhost",
-    "username": "guest",
-    "password": "guest"
-  },
-  "STT": {
-    "username": "apikey",
-    "password": ""
-  },
-  "default_device": "default",
-  "default_language": "en-US",
-  "default_model": "broad",
-  "channels": [
-    {}
-  ],
-  "buffer_size": 512000,
-  "speaker_id_duration": 30000
+  "rabbit": true,
+  "transcribe": {
+    "default_language": "en-US",
+    "channels": [
+      {}
+    ]
+  }
 }

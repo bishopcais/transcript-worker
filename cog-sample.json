@@ -6,6 +6,7 @@
   "watcher": "http://localhost:7777",
   "id": "transcript-worker",
   "description": "STT for applications",
+  "port": 4545,
   "tags": ["stt", "worker"],
   "log": "transcript-worker.log",
   "rabbit": true,

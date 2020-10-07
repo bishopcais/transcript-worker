@@ -8,13 +8,15 @@ package manager. Alternatively for those platforms, and for Windows generally, y
 [download](https://www.ffmpeg.org/download.html) the necessary binaries and put them somewhere on your path.
 
 Then, you need to get the [STT Credentials](#STT_Credentials) and then do:
-```
+
+```bash
 npm install
 cp cog-sample.json cog.json
 ```
 
 ## Usage
-```
+
+```bash
 node transcribe.js
 ```
 
@@ -22,6 +24,7 @@ You can go to http://localhost:4545 to view a web UI that allows you to on-the-f
 and view their current status.
 
 ## Configuration
+
 To run this worker, you will need a cog.json file to handle its configuration.
 Discussed below are the various elements that go into it.
 
@@ -30,33 +33,57 @@ To find out device names:
 On Windows, use: `ffmpeg -list_devices true -f dshow -i dummy`.
 On Mac, use: `ffmpeg -list_devices true -f avfoundation -i dummy`.
 On Linux, use: `arecord -L`.
-For Mac and Linux, you can also just use **default**, and choose the device from the system dialog.
+For Mac and Linux, you can probably just use **default**, and choose the device through the system dialog. On Windows,
+you may need to take the name of the device from the command above and set the `device` key for a channel to
+point to that device, for example:
+
+```js
+{
+  // other settings
+  "transcribe": {
+    // other transcribe settings
+    "channels": [
+      {
+        "device": "Microphone (2- USB PnP Audio Device)"
+        // other channel settings
+      }
+    ]
+  }
+}
+```
 
 ### RabbitMQ
+
 If you wish to utilize RabbitMQ for the worker, you must specify the following:
+
 ```json
 {
   "rabbit": true
 }
 ```
+
 If this is not specified, the transcript worker, will just write each incoming transcription to
 the console, and nothing else. Refer to documentation for
 [@cisl/io](https://internal.cisl.rpi.edu/code/libraries/node/cisl/io) for further configuration details. See
 below for the RabbitMQ topics and payloads for this worker.
 
 ### STT Credentials
+
 You must input the credentials of [Watson Speech-to-Text service](https://www.ibm.com/watson/services/speech-to-text/),
 utilizing the `ibm-credentials.env` file for the service. See
 [node-sdk#getting-credentials](https://github.com/watson-developer-cloud/node-sdk#getting-credentials)
 for details on how to get the file and details about it.
 
 ### transcript-worker configuration
+
 Configuration for running the `transcript-worker` happens under the `transcribe` key in the
 `cog.json` file. Many of the values can be omitted, and will be instantiated with the defaults
 described below.
 
 #### Defaults
+
 Next, you will need to configure the default details of the service:
+
 ```json
 {
   "transcribe": {
@@ -67,6 +94,7 @@ Next, you will need to configure the default details of the service:
   }
 }
 ```
+
 This provides default settings for each channel you specify (see below). The device
 should be set using the instructions above. The language should be the IETF format with
 ISO 3166-1 country code. The model should either be "broad" or "narrow". You can go to
@@ -79,7 +107,9 @@ The `driver` can be either `ffmpeg` (to allow piping from `ffmpeg` onto that cha
 Note: Leaving these out of the configuration will use the values shown above.
 
 #### Channel Configuration
+
 Channel configuration is handled by a list of objects as shown below:
+
 ```json
 {
   "transcribe": {
@@ -105,12 +135,14 @@ Note: If you don't include the "channels" key, then the system will default to o
 channel with the default settings.
 
 #### Misc
+
 ```json
 {
   "buffer_size": 512000,
   "speaker_id_duration": 30000
 }
 ```
+
 The `buffer_size` specifies how big of a stored buffer each channel will have for the incoming binary
 sound buffer from ffmpeg, allowing one to fetch this for later analysis as requested.
 
@@ -120,11 +152,14 @@ The `speaker_id_duration` is how long should a channel save a speaker id once sp
 Note: Leaving these out will use the above default values.
 
 ## RabbitMQ
+
 Assuming you've configured the worker to use RabbitMQ as specified above, the worker
 will publish its results to RabbitMQ as well as allow you to configure it.
 
 ### Publishing
+
 The transcript-worker as it receives results publishes to two topics in RabbitMQ:
+
 * transcript.result.interim
 * transcript.result.final
 
@@ -134,6 +169,7 @@ the system is listening to them. The second topic is the final transcription
 returned by the service and should be taken as what the user said to the system.
 
 Both of these topics have the following message structure:
+
 ```json
 {
   "worker_id": "transcript-worker",
@@ -170,6 +206,7 @@ Both of these topics have the following message structure:
 
 The transcript worker listens for a range of commands to change how it's operating
 or to request some sort of data on the next input. These commands are:
+
 * transcript.command.switch_language
 * transcript.command.pause
 * transcript.command.unpause
@@ -193,6 +230,7 @@ was requested for a channel using `transcript.command.extract_pitchtone`). After
 next spoken word/phrase that is transcribed will be sent, regardless of the usage of a wake-up word or otherwise.
 
 Below is an example of code that can be used to interface with the transcript-worker and Learning Assistant:
+
 ```javascript
 const io = require('@cisl/io');
 const wav = require('wav');
@@ -234,6 +272,7 @@ io.rabbit.publishTopic('transcript.command.extract_pitchtone', {channel_idx: 0})
 ```
 
 where the output to the console will be:
+
 ```json
 {
   "filename": "<file_name>"
@@ -241,9 +280,11 @@ where the output to the console will be:
 ```
 
 which corresponds to `https://internal.cisl.rpi.edu/la/renders/<file_name>`, for example:
+
 ```json
 {
   "filename": "1570115937_855945.webm"
 }
 ```
+
 corresponds to https://internal.cisl.rpi.edu/la/renders/1570115937_855945.webm.

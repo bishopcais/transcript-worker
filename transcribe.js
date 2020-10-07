@@ -3,7 +3,7 @@ const stream = require('stream');
 
 const express = require('@cisl/express');
 const BinaryRingBuffer = require('@cisl/binary-ring-buffer');
-const io = require('@cisl/io');
+const io = require('@cisl/io')();
 const logger = require('@cisl/logger');
 const SpeechToTextV1 = require('ibm-watson/speech-to-text/v1');
 
@@ -24,7 +24,7 @@ const config = Object.assign(
     buffer_size: 512000,
     speaker_id_duration: 5 * 6000
   },
-  io.config.transcribe
+  io.config.get('transcribe')
 );
 
 let channels = config.channels

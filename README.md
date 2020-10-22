@@ -64,7 +64,7 @@ If you wish to utilize RabbitMQ for the worker, you must specify the following:
 
 If this is not specified, the transcript worker, will just write each incoming transcription to
 the console, and nothing else. Refer to documentation for
-[@cisl/io](https://internal.cisl.rpi.edu/code/libraries/node/cisl/io) for further configuration details. See
+[@cisl/io](https://github.com/cislrpi/io) for further configuration details. See
 below for the RabbitMQ topics and payloads for this worker.
 
 ### STT Credentials

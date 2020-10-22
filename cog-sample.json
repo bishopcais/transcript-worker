@@ -12,6 +12,10 @@
   "rabbit": true,
   "transcribe": {
     "default_language": "en-US",
+    "default_language_model": "generic",
+    "language_models": {},
+    "default_acoustic_model": null,
+    "acoustic_models": {},
     "channels": [
       {}
     ]

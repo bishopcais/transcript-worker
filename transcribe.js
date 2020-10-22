@@ -20,7 +20,10 @@ const config = Object.assign(
     default_device: 'default',
     default_language: 'en-US',
     default_model: 'broad',
+    default_language_model: 'generic',
+    language_models: {},
     default_acoustic_model: null,
+    acoustic_models: {},
     sample_rate: 16000,
     buffer_size: 512000,
     speaker_id_duration: 5 * 6000
@@ -75,10 +78,17 @@ async function initializeWatson() {
   }
   languages.sort();
 
+  /*
   currentLanguageModel = io.config.get('transcribe:default_language_model');
   languageModels = io.config.get('transcribe:language_models');
   currentAcousticModel = io.config.get('transcribe:default_acoustic_model');
   acousticModels = io.config.get('transcribe:acoustic_models');
+  */
+
+  currentLanguageModel = config.default_language_model;
+  languageModels = config.language_models;
+  currentAcousticModel = config.default_acoustic_model;
+  acousticModels = config.acoustic_models;
 }
 
 function getModelName(language, model) {

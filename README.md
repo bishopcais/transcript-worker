@@ -207,20 +207,24 @@ Both of these topics have the following message structure:
 The transcript worker listens for a range of commands to change how it's operating
 or to request some sort of data on the next input. These commands are:
 
-* transcript.command.switch_language
-* transcript.command.pause
-* transcript.command.unpause
-* transcript.command.extract_pitchtone
-* transcript.command.tag_channel
-* transcript.command.start_publish
-* transcript.command.stop_publish
+* transcript.command.tag_channel: `{"channel_idx": number, "speaker": string}`
+* transcript.command.switch_language: `{"channel_idx": number|null, "language": string}`
+* transcript.command.pause: `{"channel_idx": number|null}`
+* transcript.command.unpause: `{"channel_idx": number|null}`
+* transcript.command.extract_pitchtone `{"channel_idx": number}`
+* transcript.command.start_publish `{}`
+* transcript.command.stop_publish `{}`
 
-The first three commands accept a `channel_idx` parameter to specify a specific channel
-to operate on, else it will run the command on all channels. The middle two commands
-(`extract_pitchtone` and `tag_channel`) require a `channel_idx` parameter.
+Additionally, the following legacy topics are supported:
 
-`switch_language` requires a `language` parameter.
-`tag_channel` requires a `speaker` parameter.
+* switchModel.transcript.command: `"language_model_name"`
+* switchAcousticModel.transcript.command: `"acoustic_model_name"`
+* controlAudioCapture.transcript.command: `{"channelIndex": number|null, "command": "pause"|"unpause"}`
+* rpc-transcript-|config.id|-tagChannel (__RPC Queue__): `{"channelIndex": number, "speaker": string}`
+
+__NOTE__: You can use `channel_idx` and `channelIndex` interchangeably, 
+however, it is recommended to move to `channel_idx` as `channelIndex` will be
+removed at some point.
 
 ### Integration with Learning Assistant
 

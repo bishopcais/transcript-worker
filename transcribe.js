@@ -292,14 +292,17 @@ async function startTranscriptWorker() {
 
   if (io.rabbit) {
     io.rabbit.onTopic('transcript.command.switch_language', msg => {
+      msg.content.channel_idx = msg.content.channel_idx || msg.content.channelIndex;
       changeLanguage(msg);
     });
 
     io.rabbit.onTopic('transcript.command.pause', msg => {
+      msg.content.channel_idx = msg.content.channel_idx || msg.content.channelIndex;
       changeChannelPauseState(msg, true);
     });
 
     io.rabbit.onTopic('transcript.command.unpause', msg => {
+      msg.content.channel_idx = msg.content.channel_idx || msg.content.channelIndex;
       changeChannelPauseState(msg, false);
     });
 
@@ -330,7 +333,9 @@ async function startTranscriptWorker() {
 
     // LEGACY
     io.rabbit.onTopic('controlAudioCapture.transcript.command', {contentType: 'application/json'}, (msg) => {
-      changeChannelPauseState({}, msg.content.command === 'pause')
+      changeChannelPauseState({
+        channel_idx: msg.content ? msg.content.channelIndex || msg.content.channel_idx : null,
+      }, msg.content.command === 'pause')
     });
 
     io.rabbit.onTopic('switchModel.transcript.command', {contentType: 'text/string'}, (msg) => {

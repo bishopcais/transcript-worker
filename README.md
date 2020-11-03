@@ -139,7 +139,8 @@ channel with the default settings.
 ```json
 {
   "buffer_size": 512000,
-  "speaker_id_duration": 30000
+  "speaker_id_duration": 30000,
+  "max_alternatives": 3,
 }
 ```
 
@@ -148,6 +149,8 @@ sound buffer from ffmpeg, allowing one to fetch this for later analysis as reque
 
 The `speaker_id_duration` is how long should a channel save a speaker id once specified. If set to
 `false`, then speaker ids will never be removed.
+
+The `max_alternatives` sets how many possible alternative transcriptions is returned by the Watson service.
 
 Note: Leaving these out will use the above default values.
 

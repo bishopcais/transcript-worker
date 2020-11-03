@@ -26,7 +26,8 @@ const config = Object.assign(
     acoustic_models: {},
     sample_rate: 16000,
     buffer_size: 512000,
-    speaker_id_duration: 5 * 6000
+    speaker_id_duration: 5 * 6000,
+    max_alternatives: 3,
   },
   io.config.get('transcribe')
 );
@@ -41,6 +42,8 @@ let languageModels;
 
 let currentAcousticModel;
 let acousticModels;
+
+let environmentUUID = null;
 
 if (!io.rabbit) {
   logger.warn('Only printing to console, could not find RabbitMQ.');
@@ -155,7 +158,8 @@ function publishTranscript(idx, channel, data) {
       language: channel.language,
       transcript: transcript.transcript,
       total_time: total_time,
-      result: result
+      result: result,
+      environmentUUID,
     };
 
     if (io.rabbit) {
@@ -212,7 +216,8 @@ function transcribeChannel(idx, channel) {
     inactivityTimeout: -1,
     timestamps: true,
     smartFormatting: true,
-    interimResults: true
+    interimResults: true,
+    maxAlternatives: config.max_alternatives,
   };
 
   if (currentAcousticModel) {
@@ -363,6 +368,16 @@ async function startTranscriptWorker() {
       for (let idx = 0; idx < channels.length; idx++) {
         transcribeChannel(idx, channels[idx]);
       }
+    });
+
+    io.rabbit.onTopic('setEnvironmentUUID.transcript.command', {contentType: 'application/json'}, (msg) => {
+      if (msg.content.environmentUUID) {
+        environmentUUID = msg.content.environmentUUID;
+      }
+      else {
+        environmentUUID = null;
+      }
+      logger.info(`Set environmentUUID to ${environmentUUID}`);
     });
 
     io.rabbit.onRpc(`rpc-transcript-${io.config.get('id')}-tagChannel`, {contentType: 'application/json'}, (msg, reply) => {

@@ -16,6 +16,7 @@
     "language_models": {},
     "default_acoustic_model": null,
     "acoustic_models": {},
+    "max_alternatives": 3,
     "channels": [
       {}
     ]

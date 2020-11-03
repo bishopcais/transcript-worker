@@ -45,8 +45,19 @@ let acousticModels;
 
 let environmentUUID = null;
 
+let pauseForSpeakerWorker = false;
+
 if (!io.rabbit) {
   logger.warn('Only printing to console, could not find RabbitMQ.');
+}
+else {
+  io.rabbit.onTopic('speaker.speak.begin', () => {
+    pauseForSpeakerWorker = true;
+  });
+
+  io.rabbit.onTopic('speaker.speak.end', () => {
+    pauseForSpeakerWorker = false;
+  })
 }
 
 if (!(['broad', 'narrow'].includes(config.default_model))) {
@@ -284,7 +295,7 @@ async function startTranscriptWorker() {
 
       const pausable = stream.Transform();
       pausable._transform = function(chunk, encoding, callback) {
-        if (!channel.paused) {
+        if (!(channel.paused || pauseForSpeakerWorker)) {
           this.push(chunk);
         }
         callback();

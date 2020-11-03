@@ -158,16 +158,16 @@ function publishTranscript(idx, channel, data) {
       result: result
     };
 
-    if (io.mq) {
-      io.mq.publishTopic(`transcript.result.${result.final ? 'final' : 'interim'}`, msg);
+    if (io.rabbit) {
+      io.rabbit.publishTopic(`transcript.result.${result.final ? 'final' : 'interim'}`, msg);
       // LEGACY
-      io.mq.publishTopic(`far.${result.final ? 'final' : 'interim'}.transcript`, msg);
+      io.rabbit.publishTopic(`far.${result.final ? 'final' : 'interim'}.transcript`, msg);
       // END LEGACY
     }
 
     if (result.final) {
       logger.info(`Transcript (Channel ${msg.channel_idx}): ${msg.transcript}`);
-      if (channel.extract_requested && io.mq) {
+      if (channel.extract_requested && io.rabbit) {
         channel.extract_requested = false;
         let start_time = transcript.timestamps[0][1];
         let end_time = last(last(transcript.timestamps));
@@ -175,7 +175,7 @@ function publishTranscript(idx, channel, data) {
         let start_index = (config.sample_rate * 2 * start_time);
         let end_index = (config.sample_rate * 2 * end_time);
         logger.info(`  > Extracted for analysis`);
-        io.mq.publishTopic('transcript.pitchtone.audio', channel.raw_buffer.slice(start_index, end_index));
+        io.rabbit.publishTopic('transcript.pitchtone.audio', channel.raw_buffer.slice(start_index, end_index));
       }
       logger.debug(`Transcript (Channel ${msg.channel_idx}): ${JSON.stringify(msg, null, 2)}`);
       app.wsServer.clients.forEach((client) => {

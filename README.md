@@ -127,6 +127,7 @@ Channel configuration is handled by a list of objects as shown below:
   }
 }
 ```
+
 The first channel has all values explicitly defined with the second channel
 using the defaults (see above). You can specify as many or as few of the properties
 for a channel as you want.
@@ -134,7 +135,7 @@ for a channel as you want.
 Note: If you don't include the "channels" key, then the system will default to one
 channel with the default settings.
 
-#### Misc
+#### Miscellaneous
 
 ```json
 {

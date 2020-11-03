@@ -143,6 +143,10 @@ function resetSpeaker(idx) {
 
 function publishTranscript(idx, channel, data) {
   if (data.results && data.results[0] && data.results[0].alternatives && publish && !channel.paused) {
+    if (!channel.speechStartTime) {
+      channel.speechStartTime = (new Date()).getTime() / 100;
+    }
+
     let result = data.results[0];
     let transcript = result.alternatives[0];
     transcript.transcript = transcript.transcript.trim();
@@ -170,14 +174,14 @@ function publishTranscript(idx, channel, data) {
       transcript: transcript.transcript,
       total_time: total_time,
       result: result,
+      speechStartTime: channel.speechStartTime,
+      speechEndTime: 0,
       environmentUUID,
     };
 
-    if (io.rabbit) {
-      io.rabbit.publishTopic(`transcript.result.${result.final ? 'final' : 'interim'}`, msg);
-      // LEGACY
-      io.rabbit.publishTopic(`far.${result.final ? 'final' : 'interim'}.transcript`, msg);
-      // END LEGACY
+    if (result.final) {
+      msg.speechEndTIme = (new Date()).getTime() / 100;
+      channel.speechStartTime = null;
     }
 
     if (result.final) {
@@ -202,6 +206,13 @@ function publishTranscript(idx, channel, data) {
           }
         }));
       });
+    }
+
+    if (io.rabbit) {
+      io.rabbit.publishTopic(`transcript.result.${result.final ? 'final' : 'interim'}`, msg);
+      // LEGACY
+      io.rabbit.publishTopic(`far.${result.final ? 'final' : 'interim'}.transcript`, msg);
+      // END LEGACY
     }
   }
 }

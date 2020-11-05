@@ -28,6 +28,7 @@ const config = Object.assign(
     buffer_size: 512000,
     speaker_id_duration: 5 * 6000,
     max_alternatives: 3,
+    publish_interim: false,
   },
   io.config.get('transcribe')
 );
@@ -143,11 +144,15 @@ function resetSpeaker(idx) {
 
 function publishTranscript(idx, channel, data) {
   if (data.results && data.results[0] && data.results[0].alternatives && publish && !channel.paused) {
+    let result = data.results[0];
+
+    // we always output our first interim result, which we know it is if speechStartTime is null
     if (!channel.speechStartTime) {
       channel.speechStartTime = (new Date()).getTime() / 100;
     }
-
-    let result = data.results[0];
+    else if (!config.publish_interim && !result.final) {
+      return;
+    }
     let transcript = result.alternatives[0];
     transcript.transcript = transcript.transcript.trim();
     let total_time = 0;

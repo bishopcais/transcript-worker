@@ -142,6 +142,7 @@ channel with the default settings.
   "buffer_size": 512000,
   "speaker_id_duration": 30000,
   "max_alternatives": 3,
+  "publish_interim": false
 }
 ```
 
@@ -153,9 +154,12 @@ The `speaker_id_duration` is how long should a channel save a speaker id once sp
 
 The `max_alternatives` sets how many possible alternative transcriptions is returned by the Watson service.
 
+The `publish_interim` setting when true will output all interim results as they are received from the Watson
+STT service. Setting it to false will output only the first interim result, and no subsequent values.
+
 Note: Leaving these out will use the above default values.
 
-## RabbitMQ
+## RabbitMQ Topics
 
 Assuming you've configured the worker to use RabbitMQ as specified above, the worker
 will publish its results to RabbitMQ as well as allow you to configure it.

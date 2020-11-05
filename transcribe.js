@@ -229,6 +229,7 @@ function notifyClientsChannel(channel) {
 }
 
 function transcribeChannel(idx, channel) {
+  logger.info(`opening channel ${idx}: ${channel.driver} - ${channel.device}`);
   if (channel.driver === 'fake') {
     return;
   }
@@ -251,6 +252,14 @@ function transcribeChannel(idx, channel) {
     params.acousticCustomizationId = acousticModels[currentAcousticModel];
   }
 
+  logger.info(`  -> model: ${params.model}`);
+  if (params.customizationId) {
+    logger.info(`  -> customizationId: ${params.customizationId}`);
+  }
+  if (params.acousticCustomizationId) {
+    logger.info(`  -> acousticCustomizationId: ${params.acousticCustomizationId}`);
+  }
+
   channel.stt_stream = watson_stt.recognizeUsingWebSocket(params);
   channel.stream.pipe(channel.stt_stream);
   channel.stt_stream.on('data', (data) => {
@@ -259,7 +268,7 @@ function transcribeChannel(idx, channel) {
 }
 
 async function startTranscriptWorker() {
-  logger.info(`Starting ${channels.length} channel(s):`);
+  logger.info(`Starting ${channels.length} channel(s)`);
   for (let idx = 0; idx < channels.length; idx++) {
     let channel = channels[idx];
     channel.transcript = [];
@@ -319,7 +328,6 @@ async function startTranscriptWorker() {
 
       channel.stream = channel.stream.pipe(pausable);
     }
-    logger.info(`  ${idx}: ${channel.language} - ${channel.model} - ${channel.driver} - ${channel.device}`);
   }
 
   if (io.rabbit) {
@@ -420,6 +428,17 @@ async function startTranscriptWorker() {
       reply('done');
     });
     // END LEGACY
+
+    io.rabbit.onTopic('transcript.command.restart_channel', (msg) => {
+      if (msg.content.channel_idx) {
+        transcribeChannel(msg.channel_idx, channels[msg.channel_idx]);
+      }
+      else {
+        for (let i = 0; i < channels.length; i++) {
+          transcribeChannel(i, channels[i]);
+        }
+      }
+    });
   }
 
   logger.info(`Starting to transcribe...`);

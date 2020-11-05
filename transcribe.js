@@ -233,7 +233,7 @@ function transcribeChannel(idx, channel) {
     return;
   }
   if (channel.stt_stream) {
-    channel.stt_stream.destroy();
+    channel.stt_stream.stop();
   }
   let params = {
     objectMode: true,
@@ -476,7 +476,7 @@ function stopTranscriptWorker() {
       channel.process = null;
     }
     if (channel.stt_stream) {
-      channel.stt_stream.destroy();
+      channel.stt_stream.stop();
     }
     channel.stream = null;
     channel.raw_buffer = null;

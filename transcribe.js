@@ -336,6 +336,13 @@ async function startTranscriptWorker() {
       changeLanguage(msg);
     });
 
+    io.rabbit.onTopic('transcript.command.controlAudioCapture', msg => {
+      const content = msg.content || {};
+      changeChannelPauseState({
+        channel_idx: content.channelIndex || content.channel_idx || null,
+      }, msg.content.command === 'pause');      
+    });
+    
     io.rabbit.onTopic('transcript.command.pause', msg => {
       msg.content.channel_idx = msg.content.channel_idx || msg.content.channelIndex;
       changeChannelPauseState(msg, true);
@@ -373,9 +380,10 @@ async function startTranscriptWorker() {
 
     // LEGACY
     io.rabbit.onTopic('controlAudioCapture.transcript.command', {contentType: 'application/json'}, (msg) => {
+      const content = msg.content || {};
       changeChannelPauseState({
-        channel_idx: msg.content ? msg.content.channelIndex || msg.content.channel_idx : null,
-      }, msg.content.command === 'pause')
+        channel_idx: content.channelIndex || content.channel_idx || null,
+      }, msg.content.command === 'pause');
     });
 
     io.rabbit.onTopic('switchModel.transcript.command', {contentType: 'text/string'}, (msg) => {

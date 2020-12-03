@@ -345,12 +345,12 @@ async function startTranscriptWorker() {
     
     io.rabbit.onTopic('transcript.command.pause', msg => {
       msg.content.channel_idx = msg.content.channel_idx || msg.content.channelIndex;
-      changeChannelPauseState(msg, true);
+      changeChannelPauseState(msg.content, true);
     });
 
     io.rabbit.onTopic('transcript.command.unpause', msg => {
       msg.content.channel_idx = msg.content.channel_idx || msg.content.channelIndex;
-      changeChannelPauseState(msg, false);
+      changeChannelPauseState(msg.content, false);
     });
 
     io.rabbit.onTopic('transcript.command.stop_publish', () => {
@@ -482,16 +482,16 @@ function changeLanguage(msg) {
 }
 
 function changeChannelPauseState(msg, pause) {
-  logger.info((pause ? 'Pausing' : 'Unpausing') + ` channel ${(!msg.content.channel_idx || isNaN(parseInt(msg.content.channel_idx))) ? 'all' : msg.content.channel_idx}`);
-  if (!msg.content.channel_idx || isNaN(parseInt(msg.content.channel_idx))) {
+  logger.info((pause ? 'Pausing' : 'Unpausing') + ` channel ${(!msg.channel_idx || isNaN(parseInt(msg.channel_idx))) ? 'all' : msg.channel_idx}`);
+  if (!msg.channel_idx || isNaN(parseInt(msg.channel_idx))) {
     for (let idx = 0; idx < channels.length; idx++) {
       channels[idx].paused = pause;
       notifyClientsChannel(channels[idx]);
     }
   }
-  else if (!isNaN(parseInt(msg.content.channel_idx))) {
-    channels[parseInt(msg.content.channel_idx)].paused = true;
-    notifyClientsChannel(channels[parseInt(msg.content.channel_idx)]);
+  else if (!isNaN(parseInt(msg.channel_idx))) {
+    channels[parseInt(msg.channel_idx)].paused = true;
+    notifyClientsChannel(channels[parseInt(msg.channel_idx)]);
   }
 }
 

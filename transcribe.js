@@ -386,7 +386,7 @@ async function startTranscriptWorker() {
       }, msg.content.command === 'pause');
     });
 
-    io.rabbit.onTopic('switchModel.transcript.command', {contentType: 'text/string'}, (msg) => {
+    io.rabbit.onTopic('transcript.command.switchLanguageModel', {contentType: 'text/string'}, (msg) => {
       const model = msg.content;
       if (!languageModels[model]) {
         logger.info(`Cannot find the ${model} model. Not switching.`);
@@ -399,7 +399,7 @@ async function startTranscriptWorker() {
       }
     });
 
-    io.rabbit.onTopic('switchAcousticModel.transcript.command', {contentType: 'text/string'}, (msg) => {
+    io.rabbit.onTopic('transcript.command.switchAcousticModel', {contentType: 'text/string'}, (msg) => {
       const model = msg.content;
       if (!acousticModels[model]) {
         logger.info(`Cannot find the ${model} acoustic model. Not switching.`);

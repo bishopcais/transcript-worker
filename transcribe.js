@@ -413,7 +413,7 @@ async function startTranscriptWorker() {
       }
     });
 
-    io.rabbit.onTopic('setEnvironmentUUID.transcript.command', {contentType: 'application/json'}, (msg) => {
+    io.rabbit.onTopic('transcript.command.setEnvironmentUUID', {contentType: 'application/json'}, (msg) => {
       if (msg.content.environmentUUID) {
         environmentUUID = msg.content.environmentUUID;
       }

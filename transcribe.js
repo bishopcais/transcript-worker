@@ -6,6 +6,7 @@ const BinaryRingBuffer = require('@cisl/binary-ring-buffer');
 const io = require('@cisl/io')();
 const logger = require('@cisl/logger');
 const SpeechToTextV1 = require('ibm-watson/speech-to-text/v1');
+const { BearerTokenAuthenticator } = require("ibm-cloud-sdk-core");
 
 const app = express();
 
@@ -66,7 +67,37 @@ if (!(['broad', 'narrow'].includes(config.default_model))) {
   process.exit();
 }
 
-const watson_stt = new SpeechToTextV1({});
+// let stt_url =
+//   "https://cpd-cpd-instance.sbx-cpd-speech-01-e648741016b5b16f9b585588dcd0ed80-0000.us-south.containers.appdomain.cloud/speech-to-text/cpd-instance-speech-prod-cr/instances/1635259471651757/api";
+
+// const bearerToken =
+//   "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IkhLRXVtd2RyWUpEXzM1VzB3ZzhlSHh0eFV2dmpKeGF3VjFtODFzLTczcnMifQ.eyJ1aWQiOiIxMDAwMzMwOTk5IiwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJBZG1pbiIsInBlcm1pc3Npb25zIjpbImFkbWluaXN0cmF0b3IiLCJjYW5fcHJvdmlzaW9uIl0sImdyb3VwcyI6WzEwMDAwXSwic3ViIjoiYWRtaW4iLCJpc3MiOiJLTk9YU1NPIiwiYXVkIjoiRFNYIiwiaWF0IjoxNjM1MjU5NDcyfQ.sBg3PUj7i_AmIb7jzQqr67pI8R6Zebexbf1gvIciT_TPYSUmy6yeFKIosTqmV_tTFet9f_UhchLa5OuprrYU2xX7x8IOB5tP-c11pQC9Oo4Gm8QHrTto56jyH53HWoM18hqwrzMaXSWZ2mK2FNtC8-iZ1xCjoSrJRmNJM8zg5wMfNGOpqEaZz2CHdvHm4DQU8P_U-xDb89HHm6YGYP6az5K-Z6Z-BnM_LzolLLlRI8Af8KoftIebmcqNrswMhzT_ORkw1ncCbgWiWL2Eamss0VHWChc6ERa2IXnDQqSGIz05wgMuZ1BiucRU6R8an7j2rUm-oE-JzruJMcfZwWKoXA";
+// const speechToText = new SpeechToTextV1({
+//   authenticator: new BearerTokenAuthenticator({
+//     bearerToken: bearerToken,
+//   }),
+//   disableSslVerification: true,
+//   serviceUrl: stt_url,
+// });
+
+let watson_stt;
+const watsonInfo = io.config.get('watson') || null;
+if (watsonInfo && watsonInfo.environment == 'cloudpak') {
+  console.log("watsonInfo is: ");
+  console.log(JSON.stringify(watsonInfo, null, 2));
+  let sttUrl = watsonInfo.sttURL;
+  let bearerToken = watsonInfo.bearerToken;
+  watson_stt = new SpeechToTextV1({
+    authenticator: new BearerTokenAuthenticator({
+      bearerToken: bearerToken,
+    }),
+    disableSslVerification: true,
+    serviceUrl: sttUrl,
+  });
+}
+else {
+  watson_stt = new SpeechToTextV1({});
+}
 
 function getModels() {
   return new Promise((resolve, reject) => {
